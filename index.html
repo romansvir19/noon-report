@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Noon Report">
+<meta name="theme-color" content="#1a4f8a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Noon Report</title>
+<style>
+  :root{
+    --bg:#eef1f4; --card:#fff; --line:#d5dbe2; --ink:#16222e; --muted:#69788a;
+    --field:#f5f7f9; --calc:#eaf3ff; --calc-line:#a9cdf5; --carry:#fff6e5; --carry-line:#e8c88a;
+    --accent:#1a4f8a; --warn:#a3391f; --ok:#1b6b45; --radius:10px;
+    --logbg:#fbf7ec; --logline:#c9b78c; --logink:#4a3c1c;
+  }
+  html[data-night="1"]{
+    --bg:#0a0000; --card:#140404; --line:#3d1010; --ink:#ff7a5c; --muted:#a34a35;
+    --field:#1c0606; --calc:#240808; --calc-line:#5e1a1a; --carry:#200a04; --carry-line:#6b3218;
+    --accent:#ff7a5c; --warn:#ffb199; --ok:#ff7a5c;
+    --logbg:#170703; --logline:#6b3a10; --logink:#ffb27a;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;padding:14px 14px 70px;background:var(--bg);color:var(--ink);
+    font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+  .wrap{max-width:1080px;margin:0 auto}
+  header.top{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  h1{font-size:17px;font-weight:700;margin:0;letter-spacing:.02em}
+  .status{font-size:12px;font-weight:700;padding:4px 9px;border-radius:20px;background:var(--field);border:1px solid var(--line);color:var(--muted)}
+  .status.draft{color:var(--accent);border-color:var(--calc-line);background:var(--calc)}
+  .status.done{color:var(--ok);border-color:var(--ok)}
+  .spacer{flex:1}
+  button{font:inherit;font-weight:600;color:var(--ink);background:var(--card);border:1px solid var(--line);
+    border-radius:8px;padding:9px 13px;cursor:pointer;min-height:40px}
+  button:active{transform:translateY(1px)}
+  button:disabled{opacity:.4;cursor:default}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  html[data-night="1"] button.primary{color:#140404}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
+  .sec-h{padding:11px 14px;border-bottom:1px solid var(--line);font-weight:700;font-size:14px;background:var(--field)}
+  .sec-b{padding:14px}
+  .sub{font-weight:700;font-size:13px;color:var(--muted);margin:4px 0 10px;text-transform:uppercase;letter-spacing:.06em}
+  .grid{display:grid;gap:12px;grid-template-columns:repeat(2,1fr)}
+  @media (min-width:740px){ .grid{grid-template-columns:repeat(4,1fr)} }
+  @media (max-width:480px){ .grid{grid-template-columns:1fr} }
+  .span2{grid-column:span 2}
+
+  .f{display:block}
+  .f > span{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600;
+    min-height:2.6em;line-height:1.3;display:flex;align-items:flex-end}
+  .inp{position:relative;display:flex;align-items:center}
+  input,select{width:100%;font:16px/1 -apple-system,BlinkMacSystemFont,sans-serif;font-variant-numeric:tabular-nums;
+    color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:8px;
+    padding:11px 44px 11px 12px;min-height:44px}
+  select{appearance:none;-webkit-appearance:none;font-weight:600;
+    background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
+    background-position:calc(100% - 18px) 20px, calc(100% - 13px) 20px;
+    background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+  input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
+  .unit{position:absolute;right:11px;font-size:12px;color:var(--muted);pointer-events:none}
+  .calc input{background:var(--calc);border-color:var(--calc-line);font-weight:700}
+  .calc > span::after{content:" · авто";color:var(--accent);font-weight:700}
+  .carry input{background:var(--carry);border-color:var(--carry-line)}
+  .carry > span::after{content:" · из прошлого";color:var(--muted);font-weight:700}
+  .carry.over > span::after{content:" · вручную";color:var(--warn)}
+  .calc.over > span::after{content:" · вручную";color:var(--warn)}
+  .calc.over input{background:var(--carry);border-color:var(--carry-line)}
+  input:disabled{opacity:.4}
+
+  /* блок для судового журнала — намеренно другой, «бумажный» */
+  section.log{border:2px solid var(--logline);background:var(--logbg)}
+  section.log .sec-h{background:var(--logline);color:var(--logink);border-bottom:none;
+    font-family:ui-monospace,Menlo,monospace;letter-spacing:.06em}
+  html[data-night="1"] section.log .sec-h{color:var(--logbg)}
+  section.log .hint{color:var(--logink);opacity:.75}
+  .tag{float:right;font-size:11px;font-weight:600;opacity:.8;text-transform:none;letter-spacing:0}
+  .loggrid{display:grid;gap:16px;grid-template-columns:1fr}
+  @media (min-width:740px){ .loggrid{grid-template-columns:repeat(3,1fr)} }
+  .logcol{border:1px solid var(--logline);border-radius:8px;padding:12px;background:var(--card)}
+  .logh{font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:var(--logink);
+    border-bottom:1px solid var(--logline);padding-bottom:7px;margin-bottom:12px}
+  .logh span{float:right;font-weight:400;opacity:.7;font-size:11px}
+  .logcol .f + .f{margin-top:10px}
+  .logcol .f > span{min-height:0;font-family:ui-monospace,Menlo,monospace}
+  .logcol input{background:var(--logbg);border-color:var(--logline);color:var(--logink);
+    font-family:ui-monospace,Menlo,monospace;font-weight:700}
+  .logcol .f.dlover > span::after{content:" · вручную";color:var(--warn);font-weight:700}
+  .logcol .f.dlover input{background:var(--carry);border-color:var(--carry-line)}
+
+  /* карточка завершённого перехода */
+  .voydone{background:var(--card);border:2px solid var(--ok);border-radius:var(--radius);
+    padding:20px 16px;margin-bottom:12px;text-align:center}
+  .vd-t{font-weight:800;font-size:17px;color:var(--ok)}
+  .vd-s{color:var(--muted);margin:8px 0 14px;font-size:14px}
+  .vd-b{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+
+  /* напоминания — жёлтый «стикер» под шапкой */
+  section.rem{border:2px solid var(--carry-line);background:var(--carry)}
+  .rem-h{display:flex;align-items:center;gap:8px;padding:9px 14px;font-weight:700;font-size:13px}
+  .rem-h button{min-height:32px;padding:5px 10px;font-size:12px}
+  .remtag{font-size:11px;color:var(--muted);white-space:nowrap;font-weight:700}
+  .remtag.late{color:var(--warn)}
+  .remrow{display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid var(--carry-line);font-weight:600}
+  .remrow input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent);flex:none;margin:0}
+  .remrow.did{opacity:.55}
+  .remrow.did .remtxt{text-decoration:line-through}
+  .remrow .remtag{margin-left:auto}
+  .remrow button.del{margin-left:10px}
+  .rem-edit{padding:10px 14px;border-top:1px solid var(--carry-line)}
+  .rem-add{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .rem-add input[type=text]{flex:2;min-width:150px;padding-right:12px}
+  .rem-add select{flex:1;min-width:130px;width:auto}
+  .rem-add input[type=date]{width:auto;padding-right:12px}
+  .remimp{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--warn);user-select:none}
+  .remimp input{width:18px;height:18px;accent-color:var(--warn);margin:0}
+  /* важные напоминания — красная кромка и жирный текст */
+  .remrow.imp{box-shadow:inset 4px 0 0 var(--warn)}
+  .remrow.imp .remtxt{font-weight:800}
+  .remrow.imp .remtxt::before{content:"! ";color:var(--warn);font-weight:800}
+  #voySec{border-style:dashed}
+  #voySec .sec-h{cursor:pointer;user-select:none}
+  #voySec.collapsed .sec-b{display:none}
+  .chev2{display:inline-block;transition:transform .15s;font-weight:700}
+  #voySec:not(.collapsed) .chev2{transform:rotate(90deg)}
+
+  .voyrow{display:flex;align-items:center;gap:12px;padding:14px;border-bottom:1px solid var(--line);cursor:pointer}
+  .voyrow:last-child{border-bottom:none}
+  .voyrow:active{background:var(--field)}
+  .voyrow .rt{font-weight:700;font-size:15px}
+  .voyrow .sub2{font-size:12px;color:var(--muted);margin-top:3px}
+  .voyrow .num{margin-left:auto;text-align:right;font-variant-numeric:tabular-nums;font-size:13px;white-space:nowrap}
+  .voyrow .num b{font-size:15px}
+  .chev{color:var(--muted);font-size:18px}
+  .pill{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;
+    background:var(--field);border:1px solid var(--line);color:var(--muted);margin-left:6px;vertical-align:1px}
+  .pill.now{background:var(--calc);border-color:var(--calc-line);color:var(--accent)}
+  .histbar{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--field)}
+  .histbar button{min-height:36px;padding:6px 11px}
+
+  .rowlab{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;
+    margin:0 0 8px;border-left:3px solid var(--line);padding:2px 0 2px 8px}
+  .seg{display:flex;gap:6px}
+  .seg button{flex:1;min-height:44px;padding:11px 4px;font-size:14px;font-weight:600;background:var(--field)}
+  .seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+  html[data-night="1"] .seg button[aria-pressed="true"]{color:#140404}
+
+  .toggle{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;min-height:44px}
+  .toggle input{width:auto;min-height:0;padding:0;transform:scale(1.35);margin-left:2px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  tbody tr{cursor:pointer}
+  tbody tr:active{background:var(--field)}
+  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .del{border:none;background:none;color:var(--warn);padding:4px 6px;min-height:0;font-size:12px}
+  .empty{padding:22px 14px;color:var(--muted);font-size:13px}
+  .banner{background:var(--carry);border-bottom:1px solid var(--carry-line);padding:10px 14px;font-size:13px;
+    display:none;align-items:center;gap:10px;flex-wrap:wrap;border-radius:var(--radius);margin-bottom:12px;border:1px solid var(--carry-line)}
+  .banner.on{display:flex}
+.closed-card{display:none;align-items:center;gap:14px;background:var(--ok);color:#fff;
+    border-radius:var(--radius);padding:14px 18px;margin-bottom:12px;animation:slidein .3s ease}
+  html[data-night="1"] .closed-card{color:#140404}
+  .closed-card.on{display:flex}
+  .cc-ico{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.25);
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex:0 0 auto}
+  .cc-title{font-weight:700;font-size:15px}
+  .cc-sub{font-size:13px;opacity:.9;margin-top:2px;font-variant-numeric:tabular-nums}
+  .cc-hint{margin-left:auto;font-size:12px;opacity:.85;white-space:nowrap}
+  @keyframes slidein{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+  @keyframes flashbg{0%{background:var(--bg)}30%{background:color-mix(in srgb,var(--ok) 18%,var(--bg))}100%{background:var(--bg)}}
+  body.flash{animation:flashbg .5s ease}
+  .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(80px);background:var(--ink);
+    color:var(--bg);padding:10px 18px;border-radius:20px;font-size:13px;font-weight:600;transition:transform .22s;z-index:9;pointer-events:none}
+  .toast.on{transform:translateX(-50%) translateY(0)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>Noon Report</h1>
+  <span class="status draft" id="status">Черновик</span>
+  <div class="spacer"></div>
+  <button id="night" type="button">Night</button>
+  <button id="export" type="button">Экспорт</button>
+  <button id="importBtn" type="button">Импорт</button>
+  <input id="importFile" type="file" accept="application/json" style="display:none">
+</header>
+
+<section class="rem" id="remSec">
+  <div class="rem-h">⚑ Напоминания
+    <span class="remtag" id="remDay"></span>
+    <span class="spacer"></span>
+    <button id="remToggle" type="button">+ Заметка</button>
+  </div>
+  <div id="remToday"></div>
+  <div class="rem-edit" id="remEdit" style="display:none">
+    <div class="rem-add">
+      <input id="remText" type="text" placeholder="Новая заметка…">
+      <label class="remimp"><input id="remImp" type="checkbox"> важное</label>
+      <button id="remAdd" type="button" class="primary">Добавить</button>
+    </div>
+  </div>
+</section>
+
+<div class="banner" id="banner">
+  <strong>Открыт закрытый репорт из истории —</strong>
+  <span id="bannerDate"></span>
+  <div class="spacer"></div>
+  <button id="backToDraft" type="button">Вернуться к текущему</button>
+</div>
+
+<div class="closed-card" id="closedCard">
+  <div class="cc-ico">✓</div>
+  <div>
+    <div class="cc-title" id="closedTitle"></div>
+    <div class="cc-sub" id="closedSub"></div>
+  </div>
+  <div class="cc-hint">Новый бланк готов ниже</div>
+</div>
+
+<div class="voydone" id="voyDone" style="display:none">
+  <div class="vd-t">⚓ Переход завершён</div>
+  <div class="vd-s" id="voyDoneSub"></div>
+  <div class="vd-b">
+    <button class="primary" id="voyDoneNew" type="button">+ Начать новый переход</button>
+    <button id="voyDoneReopen" type="button">Вернуть в работу</button>
+  </div>
+</div>
+
+<div id="formArea">
+<section>
+  <div class="sec-h">Дата и время</div>
+  <div class="sec-b">
+    <div class="grid">
+      <label class="f"><span>Date (ship)</span>
+        <div class="inp"><input id="date" type="date"></div>
+      </label>
+      <label class="f"><span>Время репорта (ship)</span>
+        <div class="inp"><input id="rtime" type="time"></div>
+      </label>
+      <label class="f"><span>Тип репорта</span>
+        <div class="inp"><select id="rtype">
+          <option>NOON</option>
+          <option>EOSP</option>
+          <option>COSP</option>
+          <option>Departure</option>
+          <option>Arrival</option>
+          <option>Anchor</option>
+        </select></div>
+      </label>
+      <label class="f"><span>Time zone</span>
+        <div class="inp"><select id="tz"></select></div>
+      </label>
+      <input id="tzPrev" type="hidden">
+      <input id="datePrev" type="hidden">
+      <input id="timePrev" type="hidden">
+      <label class="f calc" id="hoursWrap"><span>Hours in period</span>
+        <div class="inp"><input id="hours" type="number" inputmode="decimal" step="0.001"><span class="unit">h</span></div>
+      </label>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-h">Distance</div>
+  <div class="sec-b">
+
+    <div class="sub">Trip counter GPS</div>
+
+    <div class="rowlab">Показания ECDIS</div>
+    <div class="grid">
+      <label class="f carry"><span>Previous</span>
+        <div class="inp"><input id="gpsRdPrev" type="number" inputmode="decimal" step="0.1"><span class="unit">nm</span></div></label>
+      <label class="f"><span>Current</span>
+        <div class="inp"><input id="gpsRdCurr" type="number" inputmode="decimal" step="0.1"><span class="unit">nm</span></div></label>
+    </div>
+
+    <div class="rowlab" style="margin-top:14px">Репорт</div>
+    <div class="grid">
+      <label class="f carry"><span>Previous</span>
+        <div class="inp"><input id="gpsPrev" type="number" inputmode="decimal" step="0.1"><span class="unit">nm</span></div></label>
+      <label class="f calc"><span>Distance over ground</span>
+        <div class="inp"><input id="dog" type="text" readonly><span class="unit">nm</span></div></label>
+      <label class="f calc"><span>Current</span>
+        <div class="inp"><input id="gpsCurr" type="text" readonly><span class="unit">nm</span></div></label>
+      <label class="f calc"><span>Speed over ground</span>
+        <div class="inp"><input id="sog" type="text" readonly><span class="unit">kn</span></div></label>
+    </div>
+
+    <div class="sub" style="margin-top:22px">Trip counter log</div>
+
+    <div class="rowlab">Показания ECDIS</div>
+    <div class="grid">
+      <label class="f carry"><span>Previous</span>
+        <div class="inp"><input id="logRdPrev" type="number" inputmode="decimal" step="0.1"><span class="unit">nm</span></div></label>
+      <label class="f"><span>Current</span>
+        <div class="inp"><input id="logRdCurr" type="number" inputmode="decimal" step="0.1"><span class="unit">nm</span></div></label>
+    </div>
+
+    <div class="rowlab" style="margin-top:14px">Репорт</div>
+    <div class="grid">
+      <label class="f carry"><span>Previous</span>
+        <div class="inp"><input id="logPrev" type="number" inputmode="decimal" step="0.1"><span class="unit">nm</span></div></label>
+      <label class="f calc"><span>Distance through water</span>
+        <div class="inp"><input id="dtw" type="text" readonly><span class="unit">nm</span></div></label>
+      <label class="f calc"><span>Current</span>
+        <div class="inp"><input id="logCurr" type="text" readonly><span class="unit">nm</span></div></label>
+      <label class="f calc"><span>Speed through water</span>
+        <div class="inp"><input id="stw" type="text" readonly><span class="unit">kn</span></div></label>
+    </div>
+  </section>
+
+<section>
+  <div class="sec-h">Weather</div>
+  <div class="sec-b">
+    <div class="grid">
+      <label class="f"><span>Wind force (Beaufort)</span>
+        <div class="inp"><input id="wxBft" type="number" inputmode="numeric" step="1" min="0" max="12"><span class="unit">Bft</span></div></label>
+      <label class="f calc"><span>Wind speed</span>
+        <div class="inp"><input id="wxMs" type="text" readonly><span class="unit">m/s</span></div></label>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-h">Current</div>
+  <div class="sec-b">
+    <div class="grid">
+      <label class="f calc"><span>Current speed</span>
+        <div class="inp"><input id="curSpeed" type="text" readonly><span class="unit">kn</span></div></label>
+      <label class="f" id="curDirWrap"><span>Current direction</span>
+        <div class="inp"><input id="curDir" type="number" inputmode="numeric" step="1" min="0" max="360"><span class="unit">°</span></div></label>
+      <label class="f"><span>Course</span>
+        <div class="inp"><input id="course" type="number" inputmode="numeric" step="1" min="0" max="360"><span class="unit">°</span></div></label>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-h">Main engine</div>
+  <div class="sec-b">
+
+    <div class="rowlab">Running hours</div>
+    <div class="grid">
+      <label class="f carry"><span>Previous</span>
+        <div class="inp"><input id="meRhPrev" type="number" inputmode="decimal" step="0.1"><span class="unit">hours</span></div></label>
+      <label class="f calc"><span>Current</span>
+        <div class="inp"><input id="meRhCurr" type="text" readonly><span class="unit">hours</span></div></label>
+      <label class="f calc" id="meRhWrap"><span>Running hours</span>
+        <div class="inp"><input id="meRh" type="number" inputmode="decimal" step="0.1"><span class="unit">hours</span></div></label>
+    </div>
+
+    <div class="rowlab" style="margin-top:14px">Revolutions</div>
+    <div class="grid">
+      <label class="f carry"><span>Previous</span>
+        <div class="inp"><input id="meRevPrev" type="number" inputmode="numeric" step="1"><span class="unit">revs</span></div></label>
+      <label class="f calc"><span>Current</span>
+        <div class="inp"><input id="meRevCurr" type="text" readonly><span class="unit">revs</span></div></label>
+      <label class="f"><span>Revolutions</span>
+        <div class="inp"><input id="meRev" type="number" inputmode="decimal" step="1"><span class="unit">revs</span></div></label>
+    </div>
+
+    <div class="rowlab" style="margin-top:14px">Показатели</div>
+    <div class="grid">
+      <label class="f calc"><span>Average power at torsion meter</span>
+        <div class="inp"><input id="mePwrTorsion" type="text" readonly><span class="unit">kW</span></div></label>
+      <label class="f"><span>Estimated power at main engine</span>
+        <div class="inp"><input id="mePwrEst" type="number" inputmode="decimal" step="0.001"><span class="unit">kW</span></div></label>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-h">Aux. engines</div>
+  <div class="sec-b">
+    <div class="rowlab">Aux. Engine 1</div>
+    <div class="grid">
+      <label class="f carry"><span>Previous</span>
+        <div class="inp"><input id="ae1Prev" type="number" inputmode="decimal" step="0.1"><span class="unit">hours</span></div></label>
+      <label class="f calc"><span>Current</span>
+        <div class="inp"><input id="ae1Curr" type="text" readonly><span class="unit">hours</span></div></label>
+      <label class="f"><span>Running hours</span>
+        <div class="inp"><input id="ae1Rh" type="number" inputmode="decimal" step="0.1"><span class="unit">hours</span></div></label>
+    </div>
+    <div class="rowlab" style="margin-top:14px">Aux. Engine 2</div>
+    <div class="grid">
+      <label class="f carry"><span>Previous</span>
+        <div class="inp"><input id="ae2Prev" type="number" inputmode="decimal" step="0.1"><span class="unit">hours</span></div></label>
+      <label class="f calc"><span>Current</span>
+        <div class="inp"><input id="ae2Curr" type="text" readonly><span class="unit">hours</span></div></label>
+      <label class="f"><span>Running hours</span>
+        <div class="inp"><input id="ae2Rh" type="number" inputmode="decimal" step="0.1"><span class="unit">hours</span></div></label>
+    </div>
+    <div class="rowlab" style="margin-top:14px">Aux. Engine 3</div>
+    <div class="grid">
+      <label class="f carry"><span>Previous</span>
+        <div class="inp"><input id="ae3Prev" type="number" inputmode="decimal" step="0.1"><span class="unit">hours</span></div></label>
+      <label class="f calc"><span>Current</span>
+        <div class="inp"><input id="ae3Curr" type="text" readonly><span class="unit">hours</span></div></label>
+      <label class="f"><span>Running hours</span>
+        <div class="inp"><input id="ae3Rh" type="number" inputmode="decimal" step="0.1"><span class="unit">hours</span></div></label>
+    </div>
+  </div>
+</section>
+
+<section class="log">
+  <div class="sec-h">Deck Log Book <span class="tag">переписать в судовой журнал</span></div>
+  <div class="sec-b">
+    <div class="loggrid">
+
+      <div class="logcol">
+        <div class="logh">Distance in miles</div>
+        <label class="f"><span>Day's run</span>
+          <div class="inp"><input id="dlDays" type="text" inputmode="decimal"><span class="unit">nm</span></div></label>
+        <label class="f"><span>Total Dist.</span>
+          <div class="inp"><input id="dlTotalDist" type="text" inputmode="decimal"><span class="unit">nm</span></div></label>
+        <label class="f"><span>Dist. to go</span>
+          <div class="inp"><input id="dlDtg" type="text" inputmode="decimal"><span class="unit">nm</span></div></label>
+      </div>
+
+      <div class="logcol">
+        <div class="logh">Steaming Time <span>Hours / Min</span></div>
+        <label class="f"><span>This day</span>
+          <div class="inp"><input id="dlSteamDay" type="text"></div></label>
+        <label class="f"><span>Total</span>
+          <div class="inp"><input id="dlSteamTotal" type="text"></div></label>
+      </div>
+
+      <div class="logcol">
+        <div class="logh">Speed made good <span>Knots</span></div>
+        <label class="f"><span>Avg.</span>
+          <div class="inp"><input id="dlAvg" type="text" inputmode="decimal"><span class="unit">kn</span></div></label>
+        <label class="f"><span>Gen Avg.</span>
+          <div class="inp"><input id="dlGenAvg" type="text" inputmode="decimal"><span class="unit">kn</span></div></label>
+      </div>
+
+    </div>
+    <div class="hint" id="logHint">Всё считается само, но любое поле можно переписать вручную — следующие дни пойдут уже от твоей цифры. Очисти поле, чтобы вернуть авторасчёт. Время можно вводить как «25h 24m», «25:24» или «25.4».</div>
+  </div>
+</section>
+
+<div class="bar">
+  <button class="primary" id="close" type="button">Закрыть репорт за день</button>
+  <button class="primary" id="saveEdit" type="button" style="display:none">Сохранить изменения</button>
+  <button id="reset" type="button">Сбросить черновик</button>
+  <span class="hint" id="draftInfo" style="margin:0">Черновик сохраняется автоматически</span>
+</div>
+</div>
+
+<section id="voySec" class="collapsed">
+  <div class="sec-h" id="voyHead"><span class="chev2" id="voyChev">›</span> Переход <span id="voyRoute" class="tag" style="float:none;margin-left:8px"></span><span class="tag" id="voyTag"></span></div>
+  <div class="sec-b">
+    <div class="grid">
+      <label class="f span2"><span>Текущий переход</span>
+        <div class="inp"><select id="voySel"></select></div></label>
+      <div class="f span2"><span>&nbsp;</span>
+        <div class="seg">
+          <button id="voyNew" type="button">+ Начать переход</button>
+          <button id="voyClose" type="button">Завершить переход</button>
+        </div>
+      </div>
+    </div>
+    <div class="grid" style="margin-top:12px">
+      <label class="f"><span>Порт отхода</span>
+        <div class="inp"><input id="voyFrom" type="text" placeholder="Singapore"></div></label>
+      <label class="f"><span>Порт назначения</span>
+        <div class="inp"><input id="voyTo" type="text" placeholder="Rotterdam"></div></label>
+      <label class="f"><span>Начало перехода</span>
+        <div class="inp"><input id="voyStart" type="date"></div></label>
+      <label class="f"><span>Время отхода (ship)</span>
+        <div class="inp"><input id="voyStartTime" type="time" value="12:00"></div></label>
+      <label class="f"><span>Distance to go на начало</span>
+        <div class="inp"><input id="voyDtg" type="number" inputmode="decimal" step="0.1"><span class="unit">nm</span></div></label>
+    </div>
+
+    <div class="rowlab" style="margin-top:16px">Стартовые показания — точка отсчёта</div>
+    <div class="grid">
+      <label class="f"><span>GPS: ECDIS показания</span>
+        <div class="inp"><input id="voySGpsRd" type="number" inputmode="decimal" step="0.1"><span class="unit">nm</span></div></label>
+      <label class="f"><span>GPS: репорт Previous</span>
+        <div class="inp"><input id="voySGps" type="number" inputmode="decimal" step="0.1"><span class="unit">nm</span></div></label>
+      <label class="f"><span>Лаг: ECDIS показания</span>
+        <div class="inp"><input id="voySLogRd" type="number" inputmode="decimal" step="0.1"><span class="unit">nm</span></div></label>
+      <label class="f"><span>Лаг: репорт Previous</span>
+        <div class="inp"><input id="voySLog" type="number" inputmode="decimal" step="0.1"><span class="unit">nm</span></div></label>
+      <label class="f"><span>ME: Running hours</span>
+        <div class="inp"><input id="voySMeRh" type="number" inputmode="decimal" step="0.1"><span class="unit">hours</span></div></label>
+      <label class="f"><span>ME: Revolutions</span>
+        <div class="inp"><input id="voySMeRev" type="number" inputmode="numeric" step="1"><span class="unit">revs</span></div></label>
+    </div>
+    <div class="hint">Это Previous для первого репорта перехода — вводишь после отхода, с уже посчитанным лоцманским переходом. Оставишь пустым — возьмётся из последнего репорта прошлого перехода.</div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-h">История</div>
+
+  <div id="voyList"></div>
+
+  <div id="repList" style="display:none">
+    <div class="histbar">
+      <button id="histBack" type="button">← Все переходы</button>
+      <strong id="histName"></strong>
+    </div>
+    <div class="scroll"><table id="tbl">
+      <thead><tr>
+        <th>Date</th><th>DOG</th><th>SOG</th><th>DTW</th><th>STW</th>
+        <th>ME hours</th><th>ME revs</th><th></th>
+      </tr></thead><tbody></tbody>
+    </table></div>
+    <div class="empty" id="empty">В этом переходе репортов пока нет.</div>
+  </div>
+</section>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const K_ENTRIES = 'noonreport.entries.v2';
+const K_DRAFT   = 'noonreport.draft.v2';
+const K_NIGHT   = 'noonreport.night';
+
+/* ============================================================
+   CARRY — переносится по цепочке: правка старого репорта
+   пересчитывает все следующие вплоть до текущего черновика.
+   SEED — только подставляется в новый бланк, по цепочке не бежит.
+   ============================================================ */
+const CARRY = [
+  { from:'tz',        to:'tzPrev'    },
+  { from:'date',      to:'datePrev'  },
+  { from:'rtime',     to:'timePrev'  },
+  { from:'gpsRdCurr', to:'gpsRdPrev' },
+  { from:'logRdCurr', to:'logRdPrev' },
+  { from:'gpsCurr',   to:'gpsPrev'   },
+  { from:'logCurr',   to:'logPrev'   },
+  { from:'meRhCurr',  to:'meRhPrev'  },
+  { from:'meRevCurr', to:'meRevPrev' },
+  { from:'ae1Curr',   to:'ae1Prev'   },
+  { from:'ae2Curr',   to:'ae2Prev'   },
+  { from:'ae3Curr',   to:'ae3Prev'   }
+];
+const SEED = [
+  { from:'tz',       to:'tz'       }
+];
+
+const K_VOY = 'noonreport.voyages.v1';
+
+const DL = ['dlDays','dlTotalDist','dlDtg','dlSteamDay','dlSteamTotal','dlAvg','dlGenAvg'];
+
+/* Бофорт: [узлы от, узлы до, м/с от, м/с до] */
+const BFT = {
+  0:[0,1,0,0.2],   1:[1,3,0.3,1.5],   2:[4,6,1.6,3.3],   3:[7,10,3.4,5.4],
+  4:[11,16,5.5,7.9], 5:[17,21,8.0,10.7], 6:[22,27,10.8,13.8], 7:[28,33,13.9,17.1],
+  8:[34,40,17.2,20.7], 9:[41,47,20.8,24.4], 10:[48,55,24.5,28.4], 11:[56,63,28.5,32.6],
+  12:[64,71,32.7,36.9]
+};
+
+const SHAFT_K = 0.99;   // потери на валу: torsion = estimated × 0.99
+
+/* ---------- часовые пояса ---------- */
+/* 'UTC+05:30' → минуты; понимает и старые записи вида '+8', 'GMT+5:30' */
+function tzMin(s){
+  if (!s) return null;
+  const m = /([+-])\s*(\d{1,2})(?::?([0-5]\d))?/.exec(String(s));
+  if (m) return (m[1] === '-' ? -1 : 1) * (+m[2]*60 + (m[3] ? +m[3] : 0));
+  return /UTC|GMT/i.test(String(s)) ? 0 : null;
+}
+const tzFmt = min => 'UTC' + (min < 0 ? '-' : '+') +
+  String(Math.floor(Math.abs(min)/60)).padStart(2,'0') + ':' + String(Math.abs(min)%60).padStart(2,'0');
+
+/* список поясов: −12:00…+14:00 шагом 30 мин + непальский +05:45 */
+{
+  const sel = $('tz');
+  const mins = [];
+  for (let m = -720; m <= 840; m += 30) mins.push(m);
+  mins.push(345);
+  mins.sort((a,b) => a-b);
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '—';
+  sel.appendChild(blank);
+  mins.forEach(m => {
+    const op = document.createElement('option');
+    op.value = op.textContent = tzFmt(m);
+    sel.appendChild(op);
+  });
+}
+
+const FIELDS = ['date','rtime','rtype','tz','tzPrev','datePrev','timePrev','hours',
+  'gpsRdPrev','gpsRdCurr','gpsPrev','dog','gpsCurr','sog',
+  'logRdPrev','logRdCurr','logPrev','dtw','logCurr','stw',
+  'meRhPrev','meRh','meRhCurr','meRevPrev','meRev','meRevCurr',
+  'mePwrTorsion','mePwrEst','curSpeed','curDir','course','wxBft','wxMs',
+  'ae1Prev','ae1Curr','ae1Rh','ae2Prev','ae2Curr','ae2Rh','ae3Prev','ae3Curr','ae3Rh'];
+
+const store = {
+  async get(k){
+    if (window.storage){ try { const r = await window.storage.get(k,false); return r ? r.value : null; } catch { return null; } }
+    return localStorage.getItem(k);
+  },
+  async set(k,v){
+    if (window.storage){ try { await window.storage.set(k,v,false); return; } catch {} }
+    try { localStorage.setItem(k,v); } catch { toast('Не удалось сохранить — сделай экспорт!'); }
+  }
+};
+
+let voyages = [];     // [{id, from, to, start, dtg, cp, closed}]
+let activeVoy = null; // id текущего рейса
+let entries = [];     // закрытые репорты, новые сверху
+let draft = null;     // текущий незакрытый репорт
+let viewing = null;   // индекс открытого из истории, либо null
+
+const num = v => { const n = parseFloat(String(v).replace(',','.')); return isFinite(n) ? n : null; };
+const fmt = (n,d) => n === null ? '' : n.toFixed(d);
+const trim0 = s => s.replace(/\.0$/,'');
+
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2200); }
+
+/* длительность периода: от даты/времени прошлого репорта до текущего,
+   с поправкой на перевод часов (перевели вперёд — период короче) */
+function periodHours(o){
+  if (!o.datePrev || !o.timePrev || !o.date || !o.rtime) return null;
+  const a = new Date(o.datePrev + 'T' + o.timePrev + ':00');
+  const b = new Date(o.date + 'T' + o.rtime + ':00');
+  if (isNaN(a) || isNaN(b)) return null;
+  let h = (b - a) / 3600000;
+  const ta = tzMin(o.tzPrev), tb = tzMin(o.tz);
+  if (ta !== null && tb !== null) h -= (tb - ta) / 60;
+  return +h.toFixed(3);
+}
+
+/* ---------- чистый расчёт: работает и на форме, и на истории ---------- */
+function computeRec(o){
+  const pov = o.prevOver || {};
+  // ручные правки в приоритете — восстанавливаем их поверх любого автопереноса
+  Object.keys(pov).forEach(k => { if (pov[k] !== undefined) o[k] = pov[k]; });
+
+  // Hours сам считается от времени репортов; ручная правка в приоритете
+  if (pov.hours === undefined){
+    const ph = periodHours(o);
+    if (ph !== null) o.hours = String(ph);
+  }
+  // ME running hours = длительность периода, пока не перебито вручную
+  if (pov.meRh === undefined && o.hours !== '' && o.hours != null) o.meRh = String(o.hours);
+
+  const h = num(o.hours);
+
+  const grP = num(o.gpsRdPrev), grC = num(o.gpsRdCurr);
+  o.dog = (grP !== null && grC !== null) ? trim0(fmt(grC - grP, 1)) : '';
+  const gp = num(o.gpsPrev), dogN = num(o.dog);
+  o.gpsCurr = (gp !== null && dogN !== null) ? trim0(fmt(gp + dogN, 1)) : '';
+  o.sog = (dogN !== null && h) ? fmt(dogN / h, 5) : '';
+
+  const lrP = num(o.logRdPrev), lrC = num(o.logRdCurr);
+  o.dtw = (lrP !== null && lrC !== null) ? trim0(fmt(lrC - lrP, 1)) : '';
+  const lp = num(o.logPrev), dtwN = num(o.dtw);
+  o.logCurr = (lp !== null && dtwN !== null) ? trim0(fmt(lp + dtwN, 1)) : '';
+  o.stw = (dtwN !== null && h) ? fmt(dtwN / h, 5) : '';
+
+  const rhP = num(o.meRhPrev), rh = num(o.meRh);
+  o.meRhCurr = (rhP !== null && rh !== null) ? trim0(fmt(rhP + rh, 1)) : '';
+
+  const rvP = num(o.meRevPrev), rv = num(o.meRev);
+  o.meRevCurr = (rvP !== null && rv !== null) ? String(Math.round(rvP + rv)) : '';
+
+  const dogC = num(o.dog), dtwC = num(o.dtw);
+  o.curSpeed = (dogC !== null && dtwC !== null && h) ? fmt((dogC - dtwC) / h, 2) : '';
+  const crs = num(o.course);
+  o._dirAuto = crs !== null && o.curSpeed !== '';
+  if (o._dirAuto){
+    const cs = num(o.curSpeed);
+    o.curDir = String(Math.round(((cs >= 0 ? crs : crs + 180) % 360 + 360) % 360));
+  }
+
+  for (const n of [1,2,3]){
+    // не заполнил часы — значит генератор стоял: Current = Previous, счётчик едет дальше
+    const p = num(o['ae'+n+'Prev']), r = num(o['ae'+n+'Rh']) ?? 0;
+    o['ae'+n+'Curr'] = (p !== null) ? trim0(fmt(p + r, 1)) : '';
+  }
+
+  const bft = num(o.wxBft);
+  const br = (bft !== null && BFT[bft]) ? BFT[bft] : null;
+  o.wxMs = br ? (bft === 12 ? '32.7+' : br[2] + '–' + br[3]) : '';
+
+  const est = num(o.mePwrEst);
+  o.mePwrTorsion = est !== null ? fmt(est * SHAFT_K, 1) : '';
+  return o;
+}
+
+/* ---------- форма ↔ объект ---------- */
+/* 'HH:MM' -> часы (число) */
+function hhmm(t){ if(!t) return null; const m=/^(\d{1,2}):(\d{2})$/.exec(t); if(!m) return null; return +m[1]+ (+m[2])/60; }
+
+/* часы в формате 25h 24m */
+function hm(h){
+  if (h === null || !isFinite(h)) return '';
+  const sign = h < 0 ? '-' : '';
+  h = Math.abs(h);
+  let H = Math.floor(h), M = Math.round((h - H) * 60);
+  if (M === 60){ H++; M = 0; }
+  return sign + H + 'h ' + String(M).padStart(2,'0') + 'm';
+}
+
+/* время из ручного ввода: «25h 24m», «25:24» или десятичные часы «25.4» */
+function parseH(s){
+  if (s === null || s === undefined) return null;
+  s = String(s).trim();
+  let m = /^(-?\d+)\s*h\s*(\d{1,2})\s*m?$/i.exec(s);
+  if (m) return +m[1] + (m[1].startsWith('-') ? -1 : 1) * (+m[2])/60;
+  m = /^(-?\d+):(\d{1,2})$/.exec(s);
+  if (m) return +m[1] + (m[1].startsWith('-') ? -1 : 1) * (+m[2])/60;
+  return num(s);
+}
+
+/* Deck log book: накопления в пределах ОДНОГО рейса.
+   prev — предыдущие сутки этого же рейса, v — сам рейс.
+   o.dlOver — ручные правки {поле: строка}; накопления дальше идут от них. */
+function deckLog(o, prev, v){
+  const ov = o.dlOver || {};
+  if (!v){ DL.forEach(f => o[f] = ''); o._days=0; o._cumDist=0; o._cumSteam=0; o._dtg=null; return o; }
+
+  const dog = num(o.dog) ?? 0;
+
+  // часы за период — те же Hours (для первого репорта считаются от отхода)
+  let st = num(o.hours);
+  if (ov.dlSteamDay !== undefined) st = parseH(ov.dlSteamDay) ?? st;
+
+  const dayRun = num(ov.dlDays) ?? dog;   // Day's run — пройдено за сутки по граунду
+
+  // день перехода растёт только со сменой даты — репортов за сутки может быть несколько
+  o._days     = prev ? prev._days + (o.date !== prev.date ? 1 : 0) : 1;
+  o._cumDist  = num(ov.dlTotalDist)     ?? ((prev && prev._cumDist) || 0) + dayRun;
+  o._cumSteam = parseH(ov.dlSteamTotal) ?? ((prev && prev._cumSteam) || 0) + (st ?? 0);
+
+  const prevDtg = prev ? prev._dtg : num(v.dtg);
+  o._dtg = num(ov.dlDtg) ?? ((prevDtg === null || prevDtg === undefined) ? null : prevDtg - dayRun);
+
+  o.dlDays       = ov.dlDays       ?? (o.dog || '');
+  o.dlTotalDist  = ov.dlTotalDist  ?? trim0(fmt(o._cumDist, 1));
+  o.dlDtg        = ov.dlDtg        ?? (o._dtg === null ? '' : trim0(fmt(o._dtg, 1)));
+  o.dlSteamDay   = ov.dlSteamDay   ?? (st === null ? '' : hm(st));
+  o.dlSteamTotal = ov.dlSteamTotal ?? hm(o._cumSteam);
+  o.dlAvg        = ov.dlAvg        ?? (st ? fmt(dayRun / st, 2) : '');
+  o.dlGenAvg     = ov.dlGenAvg     ?? (o._cumSteam ? fmt(o._cumDist / o._cumSteam, 2) : '');
+  return o;
+}
+
+let formOver = {};   // ручные правки журнала для записи, открытой в форме
+let prevOver = {};   // ручные правки автополей — цепочка и расчёт их не перезаписывают
+const CARRYT = new Set([...CARRY.map(c => c.to), 'hours', 'meRh']);
+
+function readForm(){
+  const o = {};
+  FIELDS.forEach(f => o[f] = $(f).value);
+  return o;
+}
+function writeForm(o){
+  FIELDS.forEach(f => $(f).value = o[f] ?? '');
+  if (!$('rtype').value) $('rtype').value = 'NOON';   // старые записи без типа
+  if (!$('rtime').value) $('rtime').value = '12:00';
+  // пояс из старых записей мог быть текстом в другом виде — подгоняем под список
+  if (o.tz && $('tz').value !== o.tz){
+    const m = tzMin(o.tz);
+    if (m !== null) $('tz').value = tzFmt(m);
+    if ($('tz').value === ''){
+      const op = document.createElement('option');
+      op.value = op.textContent = o.tz;
+      $('tz').appendChild(op);
+      $('tz').value = o.tz;
+    }
+  }
+  formOver = {...(o.dlOver || {})};
+  prevOver = {...(o.prevOver || {})};
+  paint(o);
+  renderRem();
+}
+function paint(o){
+  ['dog','gpsCurr','sog','dtw','logCurr','stw','meRhCurr','meRevCurr','mePwrTorsion','curSpeed','wxMs','ae1Curr','ae2Curr','ae3Curr']
+    .forEach(f => $(f).value = o[f] ?? '');
+  if (o._dirAuto) $('curDir').value = o.curDir ?? '';
+  $('curDirWrap').classList.toggle('calc', !!o._dirAuto);
+  const ov = o.dlOver || {};
+  DL.forEach(f => {
+    const el = $(f);
+    if (document.activeElement !== el) el.value = o[f] ?? '';   // не сбивать ввод
+    el.closest('.f').classList.toggle('dlover', ov[f] !== undefined);
+  });
+  const pov = o.prevOver || {};
+  ['hours','meRh'].forEach(f => {
+    const el = $(f);
+    if (document.activeElement !== el) el.value = o[f] ?? '';
+  });
+  CARRYT.forEach(f => {
+    const el = $(f);
+    if (!el || el.type === 'hidden') return;
+    const wrap = el.closest('.f');
+    if (wrap) wrap.classList.toggle('over', pov[f] !== undefined);
+  });
+}
+
+
+/* пересчёт того, что сейчас на экране */
+/* ---------- цепочка ---------- */
+/* стартовые показания рейса → Previous первого репорта */
+const VOYSEED = { gpsRdPrev:'sGpsRd', gpsPrev:'sGps', logRdPrev:'sLogRd', logPrev:'sLog',
+                  meRhPrev:'sMeRh', meRevPrev:'sMeRev',
+                  datePrev:'start', timePrev:'startTime' };   // первый репорт — от отхода
+const hasSeed = v => !!v && Object.values(VOYSEED).some(k => v[k] !== '' && v[k] !== undefined && v[k] !== null);
+function applySeed(rec, v){
+  const ov = rec.prevOver || {};
+  Object.entries(VOYSEED).forEach(([f,k]) => {
+    if (ov[f] !== undefined) return;   // ручная правка важнее стартовых
+    if (v[k] !== '' && v[k] != null) rec[f] = String(v[k]);
+  });
+}
+
+/* откуда берётся Previous: прошлые сутки рейса → старт рейса → прошлый репорт вообще.
+   Поля из rec.prevOver правлены вручную — их цепочка НЕ перезаписывает. */
+function seedRec(rec, prevSameVoy, prevAny, v){
+  const ov = rec.prevOver || {};
+  const src = prevSameVoy || prevAny;
+  if (src) CARRY.forEach(c => { if (ov[c.to] !== undefined) return; if (src[c.from]) rec[c.to] = src[c.from]; });
+  if (!prevSameVoy && hasSeed(v)) applySeed(rec, v);   // стартовые рейса перекрывают перенос там, где заданы
+}
+
+/* порядок репортов: по дате, внутри суток — по номеру (seq).
+   У черновика seq нет — он всегда последний в своих сутках. */
+const recKey = r => (r.date||'') + '#' + String(r.seq === undefined ? 999 : (r.seq||0)).padStart(3,'0');
+
+function recalcChain(){
+  const asc = [...entries].sort((a,b) =>
+    (a.date||'').localeCompare(b.date||'') || (a.seq||0) - (b.seq||0));
+
+  const lastOf = {};                       // последний репорт каждого рейса
+  for (let i = 0; i < asc.length; i++){
+    const r = asc[i], v = voyById(r.voyageId);
+    seedRec(r, lastOf[r.voyageId] || null, i > 0 ? asc[i-1] : null, v);
+    computeRec(r);
+    lastOf[r.voyageId] = r;
+  }
+  const last = asc[asc.length - 1];
+  if (draft){
+    seedRec(draft, lastOf[draft.voyageId] || null, last || null, voyById(draft.voyageId));
+    computeRec(draft);
+  }
+
+  // 2) журнал — накопления ОТДЕЛЬНО в каждом рейсе
+  voyages.forEach(v => {
+    const mine = asc.filter(e => e.voyageId === v.id);
+    let prev = null;
+    mine.forEach(e => { deckLog(e, prev, v); prev = e; });
+    if (draft && draft.voyageId === v.id) deckLog(draft, prev, v);
+  });
+  asc.filter(e => !voyById(e.voyageId)).forEach(e => deckLog(e, null, null));
+  if (draft && !voyById(draft.voyageId)) deckLog(draft, null, null);
+
+  entries = asc.reverse();
+}
+
+function prevOf(rec, skipIdx){
+  let best = null;
+  const rk = recKey(rec);
+  entries.forEach((x,i) => {
+    if (i === skipIdx || !x.date || !rec.date) return;
+    if (x.voyageId !== rec.voyageId) return;
+    if (recKey(x) >= rk) return;
+    if (!best || recKey(x) > recKey(best)) best = x;
+  });
+  return best;
+}
+
+function recalc(){
+  const f = readForm();
+  f.dlOver = formOver;
+  f.prevOver = prevOver;     // до расчёта — иначе ручные правки затрутся
+  const o = computeRec(f);
+  o.voyageId = (viewing === null) ? activeVoy : entries[viewing].voyageId;
+  if (viewing !== null) o.seq = entries[viewing].seq;   // редактируем — держим место внутри суток
+  recalcChain();
+  // очищенное не-ручное поле Previous — снова подтянуть из цепочки
+  const pv = prevOf(o, viewing);
+  let refilled = false;
+  CARRY.forEach(c => {
+    if (prevOver[c.to] !== undefined) return;
+    if ((o[c.to] === '' || o[c.to] == null) && pv && pv[c.from]){ o[c.to] = pv[c.from]; refilled = true; }
+  });
+  if (refilled) computeRec(o);
+  deckLog(o, pv, voyById(o.voyageId));
+  paint(o);
+  renderRem();
+  if (viewing === null){ draft = o; saveDraft(); }
+}
+
+let dt;
+function saveDraft(){ clearTimeout(dt); dt = setTimeout(() => store.set(K_DRAFT, JSON.stringify(draft)), 300); }
+async function persist(){ await store.set(K_ENTRIES, JSON.stringify(entries)); }
+
+/* дата в 'YYYY-MM-DD' по местному времени — toISOString() здесь нельзя:
+   он переводит в UTC и в восточных поясах откатывает дату на день назад */
+const isoLocal = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+
+function blankFrom(last){
+  const o = {};
+  FIELDS.forEach(f => o[f] = '');
+  if (last){
+    [...CARRY, ...SEED].forEach(c => { if (last[c.from]) o[c.to] = last[c.from]; });
+    // после EOSP / Arrival / Anchor следующий репорт обычно в те же сутки (например NOON),
+    // после NOON / COSP / Departure — на следующий день
+    const stay = ['EOSP','Arrival','Anchor'].includes(last.rtype);
+    const d = new Date(last.date + 'T12:00:00');
+    if (!isNaN(d)){ if (!stay) d.setDate(d.getDate()+1); o.date = isoLocal(d); }
+  }
+  if (!o.date) o.date = isoLocal(new Date());
+  o.rtype = 'NOON';
+  o.rtime = '12:00';                       // штатное время репорта, правится вручную
+  o.hours = '24';                             // запасное, если времена не заданы
+  return computeRec(o);
+}
+
+/* ---------- режимы ---------- */
+function setMode(idx){
+  viewing = idx;
+  const view = idx !== null;
+  $('banner').classList.toggle('on', view);
+  $('status').textContent = view ? 'Редактирование' : 'Черновик';
+  $('status').className = 'status ' + (view ? 'done' : 'draft');
+  $('close').style.display = view ? 'none' : '';
+  $('saveEdit').style.display = view ? '' : 'none';
+  $('reset').style.display = view ? 'none' : '';
+  $('draftInfo').style.visibility = view ? 'hidden' : 'visible';
+  if (view) $('bannerDate').textContent = ((entries[idx].rtype || 'NOON') !== 'NOON' ? entries[idx].rtype + ' за ' : 'репорт за ') + entries[idx].date;
+  updateVoyState();
+}
+
+let histVoy = null;   // какой рейс раскрыт в истории
+
+function voyStats(id){
+  const mine = entries.filter(e => e.voyageId === id)
+    .sort((a,b) => (a.date||'').localeCompare(b.date||'') || (a.seq||0) - (b.seq||0));
+  const last = mine[mine.length-1];
+  return {
+    n: mine.length,
+    dist: last ? last.dlTotalDist : '',
+    dtg: last ? last.dlDtg : '',
+    from: mine[0] ? mine[0].date : '',
+    to: last ? last.date : ''
+  };
+}
+
+function renderVoyList(){
+  const box = $('voyList');
+  box.innerHTML = '';
+  if (!voyages.length){
+    box.innerHTML = '<div class="empty">Переходов пока нет — начни первый в блоке «Переход» выше.</div>';
+    return;
+  }
+  [...voyages].reverse().forEach(v => {
+    const st = voyStats(v.id);
+    const row = document.createElement('div');
+    row.className = 'voyrow';
+    const left = document.createElement('div');
+    const route = [v.from, v.to].filter(Boolean).join(' → ') || 'Переход без названия';
+    const rt = document.createElement('div');
+    rt.className = 'rt'; rt.textContent = route;
+    if (v.id === activeVoy){ const p=document.createElement('span'); p.className='pill now'; p.textContent='текущий'; rt.appendChild(p); }
+    else if (v.closed){ const p=document.createElement('span'); p.className='pill'; p.textContent='завершён'; rt.appendChild(p); }
+    const sub = document.createElement('div');
+    sub.className = 'sub2';
+    sub.textContent = st.n
+      ? st.n + ' репортов · ' + (st.from||'') + (st.to && st.to!==st.from ? ' — ' + st.to : '')
+      : 'репортов нет';
+    left.appendChild(rt); left.appendChild(sub);
+
+    const num = document.createElement('div');
+    num.className = 'num';
+    num.innerHTML = st.dist ? '<b>' + st.dist + '</b> nm пройдено' + (st.dtg ? '<br>' + st.dtg + ' nm осталось' : '') : '';
+
+    const ch = document.createElement('div');
+    ch.className = 'chev'; ch.textContent = '›';
+
+    row.appendChild(left); row.appendChild(num); row.appendChild(ch);
+    row.onclick = () => { histVoy = v.id; render(); $('repList').scrollIntoView({behavior:'smooth', block:'start'}); };
+    box.appendChild(row);
+  });
+}
+
+function render(){
+  renderVoyList();
+  const open = histVoy && voyById(histVoy);
+  $('voyList').style.display = open ? 'none' : '';
+  $('repList').style.display = open ? '' : 'none';
+  if (!open) return;
+
+  const v = voyById(histVoy);
+  $('histName').textContent = [v.from, v.to].filter(Boolean).join(' → ') || 'Переход без названия';
+
+  const tb = $('tbl').querySelector('tbody');
+  tb.innerHTML = '';
+  const mine = entries.filter(e => e.voyageId === histVoy);
+  $('empty').style.display = mine.length ? 'none' : 'block';
+
+  entries.forEach((e,i) => {
+    if (e.voyageId !== histVoy) return;
+    const tr = document.createElement('tr');
+    [e.date + (e.rtype && e.rtype !== 'NOON' ? ' · ' + e.rtype : ''),
+     e.dog,e.sog,e.dtw,e.stw,e.meRh,e.meRev]
+      .forEach(c => { const td=document.createElement('td'); td.textContent=c??''; tr.appendChild(td); });
+    const td = document.createElement('td');
+    const b = document.createElement('button');
+    b.className='del'; b.type='button'; b.textContent='Удалить';
+    b.onclick = async ev => {
+      ev.stopPropagation();
+      if (!confirm('Удалить ' + (e.rtype||'NOON') + ' за ' + (e.date||'—') + '? Следующие репорты пересчитаются.')) return;
+      const wasViewing = viewing === i;
+      entries.splice(i,1);
+      recalcChain();
+      await persist(); await store.set(K_DRAFT, JSON.stringify(draft));
+      if (wasViewing) backToDraft(); else if (viewing !== null && viewing > i) viewing--;
+      if (viewing === null) writeForm(draft);
+      renderVoy(); render();
+      toast('Удалено, цепочка пересчитана');
+    };
+    td.appendChild(b); tr.appendChild(td);
+    tr.onclick = () => openEntry(i);
+    tb.appendChild(tr);
+  });
+}
+
+$('histBack').onclick = () => { histVoy = null; render(); };
+
+function openEntry(i){
+  writeForm(entries[i]);
+  setMode(i);
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+function backToDraft(){
+  setMode(null);
+  writeForm(draft);
+}
+$('backToDraft').onclick = backToDraft;
+
+/* сохранить правку старого репорта и протянуть её вперёд */
+$('saveEdit').onclick = async () => {
+  const ef = readForm();
+  ef.dlOver = formOver;
+  ef.prevOver = prevOver;
+  const e = computeRec(ef);
+  if (!e.date){ toast('Укажи дату'); $('date').focus(); return; }
+  const clash = entries.findIndex((x,i) => i !== viewing && x.date === e.date && (x.rtype||'NOON') === (e.rtype||'NOON'));
+  if (clash > -1){ toast((e.rtype||'NOON') + ' за ' + e.date + ' уже есть'); return; }
+  e.closedAt = entries[viewing].closedAt;
+  e.voyageId = entries[viewing].voyageId;
+  e.seq = entries[viewing].seq;
+  e.editedAt = new Date().toISOString();
+  entries[viewing] = e;
+  recalcChain();
+  await persist(); await store.set(K_DRAFT, JSON.stringify(draft));
+  const idx = entries.findIndex(x => x.date === e.date && (x.rtype||'NOON') === (e.rtype||'NOON'));
+  render();
+  if (idx > -1){ writeForm(entries[idx]); setMode(idx); }
+  toast('Сохранено, следующие дни пересчитаны');
+};
+
+$('close').onclick = async () => {
+  const cf = readForm();
+  cf.dlOver = formOver;
+  cf.prevOver = prevOver;
+  const e = computeRec(cf);
+  if (!e.date){ toast('Укажи дату'); $('date').focus(); return; }
+  // несколько репортов в сутки — можно; дубль той же даты И типа — перезапись с подтверждением
+  const rt = e.rtype || 'NOON';
+  const dupIdx = entries.findIndex(x => x.date === e.date && (x.rtype || 'NOON') === rt);
+  if (dupIdx > -1){
+    if (!confirm(rt + ' за ' + e.date + ' уже закрыт. Перезаписать?')) return;
+    e.seq = entries[dupIdx].seq ?? 0;
+    entries.splice(dupIdx, 1);
+  } else {
+    const same = entries.filter(x => x.date === e.date);
+    e.seq = same.length ? Math.max(...same.map(x => x.seq || 0)) + 1 : 0;
+  }
+  e.closedAt = new Date().toISOString();
+  e.voyageId = activeVoy;
+  entries.push(e);
+  draft = blankFrom(e);
+  draft.voyageId = activeVoy;
+  recalcChain();
+  await persist(); await store.set(K_DRAFT, JSON.stringify(draft));
+  writeForm(draft);
+  renderVoy(); render();
+
+  // видимая обратная связь: карточка-итог + переход к новому бланку
+  const saved = entries.find(x => x.date === e.date && (x.rtype||'NOON') === rt && x.voyageId === activeVoy) || e;
+  showClosed(saved);
+  flash();
+  window.scrollTo({top:0, behavior:'smooth'});
+};
+
+function showClosed(e){
+  const box = $('closedCard');
+  const parts = [];
+  if (e.dog) parts.push('пройдено ' + e.dog + ' nm');
+  if (e.dlDtg) parts.push('до порта ' + e.dlDtg + ' nm');
+  if (e._days) parts.push('день перехода ' + e._days);
+  $('closedTitle').textContent = ((e.rtype || 'NOON') !== 'NOON' ? e.rtype : 'Репорт') + ' за ' + e.date + ' закрыт';
+  $('closedSub').textContent = parts.join(' · ');
+  box.classList.add('on');
+  clearTimeout(box._t); box._t = setTimeout(() => box.classList.remove('on'), 6000);
+}
+function flash(){
+  document.body.classList.add('flash');
+  setTimeout(() => document.body.classList.remove('flash'), 500);
+}
+
+$('reset').onclick = () => {
+  if (!confirm('Очистить текущий черновик? История останется на месте.')) return;
+  draft = blankFrom(entries[0]);
+  writeForm(draft);
+  saveDraft();
+};
+
+$('export').onclick = async () => {
+  const text = JSON.stringify({app:'noon-report', v:3, voyages, activeVoy, entries, draft}, null, 2);
+  const name = 'noon-report-' + new Date().toISOString().slice(0,10) + '.json';
+  // в полноэкранном режиме на iOS обычная ссылка-скачивание молча не срабатывает,
+  // поэтому сначала пробуем системное «Поделиться»
+  try {
+    const file = new File([text], name, {type:'application/json'});
+    if (navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:name});
+      toast('Файл отправлен');
+      return;
+    }
+  } catch(err){
+    if (err && err.name === 'AbortError') return;   // сам отменил
+  }
+  try {
+    const blob = new Blob([text],{type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast('Файл выгружен');
+  } catch {
+    toast('Не вышло — скопируй текст резервной копии');
+  }
+};
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = async () => {
+    try{
+      const d = JSON.parse(r.result);
+      const inc = Array.isArray(d) ? d : d.entries;
+      if (!Array.isArray(inc)) throw 0;
+      if (Array.isArray(d.voyages) && d.voyages.length){
+        const vm = new Map(voyages.map(v => [v.id,v]));
+        d.voyages.forEach(v => vm.set(v.id,v));
+        voyages = [...vm.values()];
+        if (d.activeVoy && voyById(d.activeVoy)) activeVoy = d.activeVoy;
+        await saveVoy();
+      }
+      const iKey = x => x.date + '#' + (x.rtype||'NOON') + '#' + (x.seq||0);
+      const m = new Map(entries.map(x => [iKey(x),x]));
+      inc.forEach(x => m.set(iKey(x),x));
+      entries = [...m.values()];
+      recalcChain();
+      await persist(); await store.set(K_DRAFT, JSON.stringify(draft));
+      if (viewing === null) writeForm(draft);
+      renderVoy(); render(); toast('Импортировано: ' + inc.length);
+    } catch { toast('Файл не читается — нужен JSON из экспорта'); }
+  };
+  r.readAsText(f); e.target.value='';
+};
+
+/* ---------- рейсы ---------- */
+const uid = () => 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+const voyById = id => voyages.find(v => v.id === id) || null;
+const activeV = () => voyById(activeVoy);
+
+function voyLabel(v){
+  const route = [v.from, v.to].filter(Boolean).join(' → ') || 'Переход без названия';
+  const d = v.start ? ' · с ' + v.start.split('-').reverse().slice(0,2).join('.') : '';
+  return route + d + (v.closed ? ' · завершён' : '');
+}
+
+/* переход завершён → прячем форму, показываем итоговую карточку */
+function updateVoyState(){
+  const v = activeV();
+  const done = !!(v && v.closed) && viewing === null;
+  $('voyDone').style.display = done ? '' : 'none';
+  $('formArea').style.display = done ? 'none' : '';
+  if (done){
+    const st = voyStats(v.id);
+    const route = [v.from, v.to].filter(Boolean).join(' → ') || 'Переход без названия';
+    const bits = [route];
+    if (st.n) bits.push('репортов: ' + st.n);
+    if (st.dist) bits.push('пройдено ' + st.dist + ' nm');
+    if (st.from) bits.push(st.from + (st.to && st.to !== st.from ? ' — ' + st.to : ''));
+    $('voyDoneSub').textContent = bits.join(' · ');
+  }
+}
+
+function renderVoy(){
+  const sel = $('voySel');
+  sel.innerHTML = '';
+  voyages.forEach(v => {
+    const o = document.createElement('option');
+    o.value = v.id; o.textContent = voyLabel(v);
+    sel.appendChild(o);
+  });
+  sel.value = activeVoy || '';
+  const v = activeV();
+  $('voyFrom').value  = v ? (v.from  || '') : '';
+  $('voyTo').value    = v ? (v.to    || '') : '';
+  $('voyStart').value = v ? (v.start || '') : '';
+  $('voyStartTime').value  = v ? (v.startTime  || '12:00') : '12:00';
+  $('voyDtg').value   = v ? (v.dtg   || '') : '';
+  Object.entries(VOYSEED).forEach(([f,k]) => {
+    const el = $('voy' + k[0].toUpperCase() + k.slice(1));
+    if (el) el.value = v ? (v[k] || '') : '';
+  });
+  const n = entries.filter(e => e.voyageId === activeVoy).length;
+  $('voyTag').textContent = v ? (v.closed ? 'завершён · репортов: ' + n : 'репортов: ' + n) : '';
+  $('voyRoute').textContent = v ? ([v.from, v.to].filter(Boolean).join(' → ')) : '';
+  $('voyClose').textContent = v && v.closed ? 'Вернуть в работу' : 'Завершить переход';
+  updateVoyState();
+}
+
+async function saveVoy(){
+  await store.set(K_VOY, JSON.stringify({voyages, active:activeVoy}));
+}
+
+async function applyVoyEdit(){
+  const v = activeV(); if (!v) return;
+  v.from = $('voyFrom').value.trim();
+  v.to   = $('voyTo').value.trim();
+  v.start= $('voyStart').value;
+  v.startTime  = $('voyStartTime').value;
+  v.dtg  = $('voyDtg').value;
+  Object.values(VOYSEED).forEach(k => {
+    const el = $('voy' + k[0].toUpperCase() + k.slice(1));
+    if (el) v[k] = el.value;
+  });
+  await saveVoy();
+  recalcChain();
+  await persist(); await store.set(K_DRAFT, JSON.stringify(draft));
+  writeForm(viewing === null ? draft : entries[viewing]);
+  renderVoy(); render();
+}
+['voyFrom','voyTo','voyStart','voyStartTime','voyDtg',
+ 'voySGpsRd','voySGps','voySLogRd','voySLog','voySMeRh','voySMeRev']
+  .forEach(id => $(id).addEventListener('input', applyVoyEdit));
+
+$('voyHead').onclick = async e => {
+  if (e.target.closest('input,select,button')) return;
+  const c = $('voySec').classList.toggle('collapsed');
+  await store.set('noonreport.voyopen', c ? '0' : '1');
+};
+
+$('voySel').onchange = async () => {
+  activeVoy = $('voySel').value;
+  histVoy = null;
+  if (viewing !== null) backToDraft();
+  if (draft) draft.voyageId = activeVoy;
+  await saveVoy();
+  recalcChain();
+  await store.set(K_DRAFT, JSON.stringify(draft));
+  writeForm(draft); renderVoy(); render();
+};
+
+$('voyNew').onclick = async () => {
+  if (!confirm('Начать новый переход? Текущий будет помечен завершённым. Стартовые показания счётчиков нужно будет ввести вручную.')) return;
+  const cur = activeV();
+  if (cur) cur.closed = true;
+  const v = { id:uid(), from: cur ? (cur.to || '') : '', to:'', start:'', dtg:'', cp: cur ? (cur.cp || '') : '',
+              startTime:'12:00',
+              sGpsRd:'', sGps:'', sLogRd:'', sLog:'', sMeRh:'', sMeRev:'', closed:false };
+  voyages.push(v);
+  activeVoy = v.id;
+  histVoy = null;
+  if (draft) draft.voyageId = activeVoy;
+  await saveVoy();
+  recalcChain();
+  await persist(); await store.set(K_DRAFT, JSON.stringify(draft));
+  writeForm(draft); renderVoy(); render();
+  $('voySec').classList.remove('collapsed');
+  $('voySec').scrollIntoView({behavior:'smooth', block:'start'});
+  $('voyTo').focus();
+  toast('Новый переход — заполни порты, DTG и стартовые показания');
+};
+
+$('voyClose').onclick = async () => {
+  const v = activeV(); if (!v) return;
+  if (!v.closed){
+    const route = [v.from, v.to].filter(Boolean).join(' → ') || 'без названия';
+    if (!confirm('Завершить переход ' + route + '? Все репорты останутся в истории.')) return;
+  }
+  v.closed = !v.closed;
+  await saveVoy(); renderVoy();
+  if (v.closed) window.scrollTo({top:0, behavior:'smooth'});   // наверх, к итоговой карточке
+  toast(v.closed ? 'Переход завершён' : 'Переход снова в работе');
+};
+$('voyDoneNew').onclick = () => $('voyNew').click();
+$('voyDoneReopen').onclick = () => $('voyClose').click();
+
+$('night').onclick = async () => {
+  const on = document.documentElement.dataset.night === '1' ? '0' : '1';
+  document.documentElement.dataset.night = on;
+  $('night').textContent = on === '1' ? 'Day' : 'Night';
+  await store.set(K_NIGHT,on);
+};
+
+['gpsRdPrev','gpsRdCurr','gpsPrev','logRdPrev','logRdCurr','logPrev','hours','date','tz',
+ 'meRhPrev','meRh','meRevPrev','meRev','mePwrEst','curDir','course','wxBft',
+ 'ae1Prev','ae1Rh','ae2Prev','ae2Rh','ae3Prev','ae3Rh']
+  .forEach(id => {
+    $(id).addEventListener('input', () => {
+      if (CARRYT.has(id)){
+        const v = $(id).value;
+        if (v.trim() === '') delete prevOver[id]; else prevOver[id] = v;
+      }
+      recalc();
+    });
+    if (CARRYT.has(id)) $(id).addEventListener('blur', () => {
+      recalc();
+      if (viewing === null && $(id).value === '' && draft && draft[id]) $(id).value = draft[id];
+    });
+  });
+
+/* журнал: ввод = ручная правка, пустое поле = вернуть авторасчёт */
+DL.forEach(f => {
+  $(f).addEventListener('input', () => {
+    const val = $(f).value;
+    if (val.trim() === '') delete formOver[f]; else formOver[f] = val;
+    recalc();
+  });
+  $(f).addEventListener('blur', recalc);   // после ухода с поля дорисовать авто-значение
+});
+$('tz').addEventListener('change', recalc);
+$('rtime').addEventListener('input', recalc);
+
+/* ---------- напоминания ---------- */
+const K_REM = 'noonreport.reminders.v1';
+let rems = [];   // {id, kind:'week'|'date', day:0-6, date:'YYYY-MM-DD', text, done:{date:true}}
+const WD = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+
+async function saveRem(){ await store.set(K_REM, JSON.stringify(rems)); }
+
+const ddmm = s => s ? s.split('-').reverse().slice(0,2).join('.') : '';
+
+/* что показывать СЕГОДНЯ (по реальному дню, не по дате репорта):
+   недельные — в свой день недели; заметки — пока не отмечены галочкой
+   (в день отметки видны зачёркнутыми, со следующего дня убираются) */
+function remFor(dateStr){
+  const d = new Date(dateStr + 'T12:00:00');
+  if (isNaN(d)) return [];
+  const wd = d.getDay();
+  return rems.filter(r =>
+    r.kind === 'week' ? r.day === wd :
+    (r.kind === 'note' || r.kind === 'task') ? (!r.doneAt || r.doneAt === dateStr) :
+    r.date === dateStr || (r.date < dateStr && !(r.done && r.done[r.date])));
+}
+
+function remRow(r, dateStr){
+  const key = r.kind === 'date' ? r.date : dateStr;
+  const row = document.createElement('div');
+  row.className = 'remrow';
+  if (r.imp) row.classList.add('imp');
+  if (dateStr !== null){
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = (r.kind === 'note' || r.kind === 'task') ? r.doneAt === dateStr : !!(r.done && r.done[key]);
+    if (cb.checked) row.classList.add('did');
+    cb.onchange = async () => {
+      if (r.kind === 'note' || r.kind === 'task'){
+        r.doneAt = cb.checked ? dateStr : null;
+      } else {
+        r.done = r.done || {};
+        if (cb.checked) r.done[key] = true; else delete r.done[key];
+      }
+      await saveRem(); renderRem();
+    };
+    row.appendChild(cb);
+  }
+  const tx = document.createElement('span');
+  tx.className = 'remtxt'; tx.textContent = r.text;
+  row.appendChild(tx);
+  const tag = document.createElement('span');
+  tag.className = 'remtag';
+  if (r.kind === 'week') tag.textContent = 'кажд. ' + WD[r.day];
+  else if (r.kind === 'note') tag.textContent = '';
+  else if (r.kind === 'task') tag.textContent = 'до выполнения';
+  else if (dateStr !== null && r.date < dateStr){ tag.textContent = 'просрочено · ' + ddmm(r.date); tag.classList.add('late'); }
+  else tag.textContent = ddmm(r.date);
+  row.appendChild(tag);
+  return row;
+}
+
+function renderRem(){
+  const dateStr = isoLocal(new Date());   // реальный сегодняшний день, не дата репорта
+  const d = new Date(dateStr + 'T12:00:00');
+  $('remDay').textContent = 'сегодня ' + WD[d.getDay()] + ' ' + ddmm(dateStr);
+  const box = $('remToday');
+  box.innerHTML = '';
+  remFor(dateStr).forEach(r => box.appendChild(remRow(r, dateStr)));
+}
+
+$('remToggle').onclick = () => {
+  const e = $('remEdit');
+  const on = e.style.display === 'none';
+  e.style.display = on ? '' : 'none';
+  $('remToggle').textContent = on ? 'Скрыть' : '+ Заметка';
+  if (on) $('remText').focus();
+};
+
+$('remAdd').onclick = async () => {
+  const text = $('remText').value.trim();
+  if (!text){ toast('Напиши текст заметки'); $('remText').focus(); return; }
+  rems.push({ id: uid(), kind:'note', text, doneAt: null, imp: $('remImp').checked });
+  await saveRem();
+  $('remText').value = '';
+  $('remImp').checked = false;
+  renderRem();
+  toast('Заметка добавлена');
+};
+$('remText').addEventListener('keydown', e => { if (e.key === 'Enter') $('remAdd').click(); });
+
+/* смена реального дня: приложение может висеть открытым сутками —
+   при возврате на экран и раз в минуту сверяем дату и перерисовываем */
+let remShownFor = isoLocal(new Date());
+function remTick(){
+  const t = isoLocal(new Date());
+  if (t !== remShownFor){ remShownFor = t; renderRem(); }
+}
+setInterval(remTick, 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) remTick(); });
+
+/* офлайн-кэш: после первой загрузки связь больше не нужна */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', () => {
+          // новая версия готова и уже есть активная — перезагружаемся на свежую
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) location.reload();
+        });
+      });
+      setInterval(() => reg.update(), 60 * 60 * 1000);   // раз в час проверять обновление
+    }).catch(()=>{});
+  });
+}
+
+(async () => {
+  const rawVoy = await store.get(K_VOY);
+  if (rawVoy){ try { const d = JSON.parse(rawVoy); voyages = d.voyages || []; activeVoy = d.active || null; } catch {} }
+  const raw = await store.get(K_ENTRIES);
+  if (raw){ try { entries = JSON.parse(raw)||[]; } catch { entries=[]; } }
+  if (await store.get(K_NIGHT) === '1'){ document.documentElement.dataset.night='1'; $('night').textContent='Day'; }
+  const dr = await store.get(K_DRAFT);
+  if (dr){ try { draft = JSON.parse(dr); } catch {} }
+  if (!draft) draft = blankFrom(entries[0]);
+
+  const rawRem = await store.get(K_REM);
+  if (rawRem){ try { rems = JSON.parse(rawRem) || []; } catch { rems = []; } }
+  else {
+    // первый запуск: постоянные дела недели (неудаляемые)
+    rems = [
+      { id: uid(), kind:'week', day:4, text:'Обновить карты',            imp:true, lock:true, done:{} },
+      { id: uid(), kind:'week', day:6, text:'Тесты GMDSS оборудования',  imp:true, lock:true, done:{} }
+    ];
+    await saveRem();
+  }
+  // миграция: встроенные недельные дела помечаем неудаляемыми
+  rems.forEach(r => {
+    if (r.kind === 'week' && (r.text === 'Обновить карты' || r.text === 'Тесты GMDSS оборудования')) r.lock = true;
+  });
+  // уборка: отмеченные галочкой заметки за прошедшие дни убираем насовсем
+  const remToday = isoLocal(new Date());
+  rems = rems.filter(r => !(r.kind === 'date' && r.done && r.done[r.date] && r.date < remToday));
+  rems = rems.filter(r => !((r.kind === 'task' || r.kind === 'note') && r.doneAt && r.doneAt < remToday));
+
+  // миграция: рейсов ещё нет — заводим первый и относим к нему всё старое
+  if (!voyages.length){
+    const old = await store.get('noonreport.voyage.v1');
+    let seed = {};
+    if (old){ try { seed = JSON.parse(old) || {}; } catch {} }
+    voyages = [{ id:uid(), from:'', to:'', start:seed.start||'', dtg:seed.dtg||'', cp:seed.cp||'',
+                 startTime:'12:00',
+                 sGpsRd:'', sGps:'', sLogRd:'', sLog:'', sMeRh:'', sMeRev:'', closed:false }];
+    activeVoy = voyages[0].id;
+    entries.forEach(e => { if (!e.voyageId) e.voyageId = activeVoy; });
+    if (draft) draft.voyageId = activeVoy;
+    await saveVoy(); await persist();
+  }
+  if (!voyById(activeVoy)) activeVoy = voyages[0].id;
+  entries.forEach(e => { if (!e.voyageId) e.voyageId = activeVoy; });
+  if (draft && !draft.voyageId) draft.voyageId = activeVoy;
+
+  recalcChain();
+  if (await store.get('noonreport.voyopen') === '1') $('voySec').classList.remove('collapsed');
+  // свежий переход без портов, стартовых показаний и репортов — раскрываем сами: надо заполнить точку отсчёта
+  const av0 = activeV();
+  if (av0 && !av0.closed && !av0.from && !av0.to && !hasSeed(av0) && !entries.some(e => e.voyageId === av0.id))
+    $('voySec').classList.remove('collapsed');
+  writeForm(draft);
+  setMode(null);
+  renderVoy();
+  render();
+})();
+</script>
+</body>
+</html>

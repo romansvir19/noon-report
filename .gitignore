@@ -1,0 +1,10 @@
+# личные данные — в репозиторий не попадают
+Новая папка/
+*.xlsx
+*.xls
+
+# системный мусор macOS
+.DS_Store
+
+# локальные настройки Claude Code
+.claude/settings.local.json
