@@ -579,12 +579,15 @@ function tzMin(s){
 const tzFmt = min => 'UTC' + (min < 0 ? '-' : '+') +
   String(Math.floor(Math.abs(min)/60)).padStart(2,'0') + ':' + String(Math.abs(min)%60).padStart(2,'0');
 
-/* список поясов: −12:00…+14:00 шагом 30 мин + непальский +05:45 */
+/* список поясов: целые часы −12:00…+14:00 плюс только реально существующие
+   неполные пояса (Ньюфаундленд, Иран, Афганистан, Индия, Непал, Мьянма,
+   Маркизы, Эукла, Центральная Австралия, Лорд-Хау, Чатем) */
+const TZ_ODD = [-570, -210, 210, 270, 330, 345, 390, 525, 570, 630, 765];
 {
   const sel = $('tz');
   const mins = [];
-  for (let m = -720; m <= 840; m += 30) mins.push(m);
-  mins.push(345);
+  for (let m = -720; m <= 840; m += 60) mins.push(m);
+  TZ_ODD.forEach(m => mins.push(m));
   mins.sort((a,b) => a-b);
   const blank = document.createElement('option');
   blank.value = ''; blank.textContent = '—';
