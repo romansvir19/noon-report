@@ -1,0 +1,16 @@
+# Netlify берёт эти настройки сам — вручную ничего вводить не нужно.
+# Сайт собирать не надо, выкладывается готовая папка deploy.
+[build]
+  publish = "deploy"
+
+# service worker и manifest не кэшировать на стороне Netlify,
+# иначе обновление приложения может не доехать до судового ПК
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
