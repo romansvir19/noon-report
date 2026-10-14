@@ -146,8 +146,8 @@
     margin:0 0 8px;border-left:3px solid var(--line);padding:2px 0 2px 8px}
   .seg{display:flex;gap:6px}
   .seg button{flex:1;min-height:44px;padding:11px 4px;font-size:14px;font-weight:600;background:var(--field)}
-  .seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
-  html[data-night="1"] .seg button[aria-pressed="true"]{color:#140404}
+  .seg button[aria-pressed="true"],.seg button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  html[data-night="1"] .seg button[aria-pressed="true"],html[data-night="1"] .seg button.primary{color:#140404}
 
   .toggle{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;min-height:44px}
   .toggle input{width:auto;min-height:0;padding:0;transform:scale(1.35);margin-left:2px}
@@ -181,6 +181,35 @@
     color:var(--bg);padding:10px 18px;border-radius:20px;font-size:13px;font-weight:600;transition:transform .22s;z-index:9;pointer-events:none}
   .toast.on{transform:translateX(-50%) translateY(0)}
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+  /* облако: пилюля в шапке и выезжающая панель */
+  button.cloud{display:flex;align-items:center;gap:6px;font-size:13px;padding:7px 11px;min-height:36px;border-radius:20px;white-space:nowrap}
+  button.cloud .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+  button.cloud.ok .dot{background:var(--ok)}
+  button.cloud.busy .dot{background:var(--accent);animation:pulse 1s infinite}
+  button.cloud.warn .dot{background:var(--warn)}
+  button.cloud.pend .dot{background:#d99a1e}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  .sheet{position:fixed;inset:0;background:rgba(10,20,30,.45);display:none;z-index:8;align-items:flex-end;justify-content:center;padding:0}
+  .sheet.on{display:flex}
+  .sheet-box{background:var(--card);border:1px solid var(--line);border-radius:16px 16px 0 0;width:100%;max-width:560px;
+    max-height:92vh;overflow:auto;padding-bottom:max(14px,env(safe-area-inset-bottom));animation:slideup .22s ease}
+  @media (min-width:600px){ .sheet{align-items:center;padding:20px} .sheet-box{border-radius:var(--radius)} }
+  @keyframes slideup{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+  .sheet-box .sec-h{display:flex;align-items:center;gap:8px;position:sticky;top:0}
+  .sheet-box .sec-h .x{margin-left:auto;min-height:32px;padding:4px 10px;font-size:14px}
+  .cl-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .cl-row span{color:var(--muted)}
+  .cl-row b{text-align:right;font-variant-numeric:tabular-nums;word-break:break-all}
+  .cl-err{color:var(--warn);font-size:13px;margin-top:10px;font-weight:600;white-space:pre-wrap}
+  .cl-block{margin-top:16px;padding:12px;border:1px dashed var(--line);border-radius:8px}
+  .cl-block .hint{margin:0 0 10px}
+  .cl-block .seg{flex-direction:column}
+  .cl-block .seg button{flex:none;min-height:44px}
+  .cl-first{border-color:var(--calc-line);background:var(--calc)}
+  .login .f + .f{margin-top:12px}
+  .login input{padding-right:12px}
+  details.cl summary{cursor:pointer;font-weight:700;font-size:13px;color:var(--muted);margin-top:16px;user-select:none}
 </style>
 </head>
 <body>
@@ -190,6 +219,7 @@
   <h1>Noon Report</h1>
   <span class="status draft" id="status">Черновик</span>
   <div class="spacer"></div>
+  <button id="cloudBtn" class="cloud" type="button" style="display:none"><span class="dot"></span><span id="cloudLbl">облако</span></button>
   <button id="night" type="button">Night</button>
   <button id="export" type="button">Экспорт</button>
   <button id="importBtn" type="button">Импорт</button>
@@ -525,11 +555,75 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<div class="sheet" id="cloudSheet">
+  <div class="sheet-box">
+    <div class="sec-h">☁ Облако <button class="x" id="cloudX" type="button">Закрыть</button></div>
+    <div class="sec-b">
+
+      <div id="cloudLogin" class="login">
+        <div class="hint" style="margin:0 0 14px">Один аккаунт на все устройства. После входа репорты и переходы
+          сами уходят в облако и приходят с других устройств — при любой связи, без твоего участия.</div>
+        <label class="f"><span>E-mail</span>
+          <div class="inp"><input id="cloudEmail" type="email" autocomplete="username" inputmode="email" autocapitalize="none"></div></label>
+        <label class="f"><span>Пароль</span>
+          <div class="inp"><input id="cloudPass" type="password" autocomplete="current-password"></div></label>
+        <div class="cl-err" id="cloudLoginErr"></div>
+        <div class="seg" style="margin-top:14px"><button class="primary" id="cloudIn" type="button">Войти</button></div>
+      </div>
+
+      <div id="cloudMain" style="display:none">
+        <div class="cl-row"><span>Аккаунт</span><b id="cloudWho"></b></div>
+        <div class="cl-row"><span>Состояние</span><b id="cloudState"></b></div>
+        <div class="cl-row"><span>Последний обмен</span><b id="cloudLast"></b></div>
+        <div class="cl-row"><span>Ждут отправки</span><b id="cloudPend"></b></div>
+        <div class="cl-err" id="cloudErr"></div>
+        <div class="seg" style="margin-top:14px">
+          <button class="primary" id="cloudSync" type="button">Синхронизировать</button>
+          <button id="cloudOut" type="button">Выйти</button>
+        </div>
+
+        <div class="cl-block cl-first" id="cloudFirst" style="display:none">
+          <div class="hint"><b>Первое подключение.</b> На этом устройстве уже есть репорты. Что с ними делать?</div>
+          <div class="seg">
+            <button class="primary" id="cloudPushAll" type="button">Отправить мои данные в облако</button>
+            <button id="cloudPullAll" type="button">Заменить мои данные облаком</button>
+          </div>
+          <div class="hint" style="margin:10px 0 0">Первое — для устройства с полной историей (обычно судовой ПК).
+            Второе — для остальных: телефон, ноутбук.</div>
+        </div>
+
+        <details class="cl">
+          <summary>Восстановление</summary>
+          <div class="cl-block">
+            <div class="hint">Если на устройствах разошлись данные. Обычно не нужно.</div>
+            <div class="seg">
+              <button id="cloudPushAll2" type="button">Отправить всё с этого устройства в облако</button>
+              <button id="cloudPullAll2" type="button">Стереть здесь и взять всё из облака</button>
+            </div>
+          </div>
+        </details>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
 const K_ENTRIES = 'noonreport.entries.v2';
 const K_DRAFT   = 'noonreport.draft.v2';
 const K_NIGHT   = 'noonreport.night';
+
+/* ============================================================
+   ОБЛАКО (Supabase). Пусто — работаем как раньше, только локально.
+   anon-ключ публичный по замыслу: доступ к данным режет RLS на сервере.
+   ============================================================ */
+const SB_URL = '';
+const SB_KEY = '';
+const K_DIRTY = 'noonreport.sync.dirty';       // {entries:{id:1}, voyages:{id:1}} — ещё не отправлено
+const K_TOMB  = 'noonreport.sync.tombstones';  // [{t, id, updatedAt}] — удалено здесь, не доложено в облако
+const K_SYNC  = 'noonreport.sync.state';       // {since, lastOk}
+const K_AUTH  = 'noonreport.sync.auth';        // токены входа
 
 /* ============================================================
    CARRY — переносится по цепочке: правка старого репорта
@@ -1012,7 +1106,11 @@ function render(){
   const mine = entries.filter(e => e.voyageId === histVoy);
   $('empty').style.display = mine.length ? 'none' : 'block';
 
-  entries.forEach((e,i) => {
+  // новые сверху, как и в массиве; пришедшие из облака тоже встают по дате
+  const order = entries.map((e,i) => i)
+    .sort((a,b) => (entries[b].date||'').localeCompare(entries[a].date||'') || (entries[b].seq||0) - (entries[a].seq||0));
+  order.forEach(i => {
+    const e = entries[i];
     if (e.voyageId !== histVoy) return;
     const tr = document.createElement('tr');
     [e.date + (e.rtype && e.rtype !== 'NOON' ? ' · ' + e.rtype : ''),
@@ -1026,6 +1124,7 @@ function render(){
       if (!confirm('Удалить ' + (e.rtype||'NOON') + ' за ' + (e.date||'—') + '? Следующие репорты пересчитаются.')) return;
       const wasViewing = viewing === i;
       entries.splice(i,1);
+      markDeleted('entries', e);
       recalcChain();
       await persist(); await store.set(K_DRAFT, JSON.stringify(draft));
       if (wasViewing) backToDraft(); else if (viewing !== null && viewing > i) viewing--;
@@ -1064,8 +1163,10 @@ $('saveEdit').onclick = async () => {
   e.closedAt = entries[viewing].closedAt;
   e.voyageId = entries[viewing].voyageId;
   e.seq = entries[viewing].seq;
+  e.id = entries[viewing].id;
   e.editedAt = new Date().toISOString();
   entries[viewing] = e;
+  markDirty('entries', e);
   recalcChain();
   await persist(); await store.set(K_DRAFT, JSON.stringify(draft));
   const idx = entries.findIndex(x => x.date === e.date && (x.rtype||'NOON') === (e.rtype||'NOON'));
@@ -1086,14 +1187,17 @@ $('close').onclick = async () => {
   if (dupIdx > -1){
     if (!confirm(rt + ' за ' + e.date + ' уже закрыт. Перезаписать?')) return;
     e.seq = entries[dupIdx].seq ?? 0;
+    e.id  = entries[dupIdx].id;            // тот же репорт, не новый — на другом устройстве заменится, а не задвоится
     entries.splice(dupIdx, 1);
   } else {
     const same = entries.filter(x => x.date === e.date);
     e.seq = same.length ? Math.max(...same.map(x => x.seq || 0)) + 1 : 0;
+    e.id = uid();
   }
   e.closedAt = new Date().toISOString();
   e.voyageId = activeVoy;
   entries.push(e);
+  markDirty('entries', e);
   draft = blankFrom(e);
   draft.voyageId = activeVoy;
   recalcChain();
@@ -1176,8 +1280,12 @@ $('importFile').onchange = e => {
       }
       const iKey = x => x.date + '#' + (x.rtype||'NOON') + '#' + (x.seq||0);
       const m = new Map(entries.map(x => [iKey(x),x]));
-      inc.forEach(x => m.set(iKey(x),x));
+      inc.forEach(x => { const old = m.get(iKey(x)); if (old && !x.id) x.id = old.id; m.set(iKey(x),x); });
       entries = [...m.values()];
+      ensureIds();
+      inc.forEach(x => { dirty.entries[x.id] = 1; });   // из резервной копии — тоже в облако
+      d.voyages && d.voyages.forEach(v => { dirty.voyages[v.id] = 1; });
+      await saveDirty(); scheduleSync(2000);
       recalcChain();
       await persist(); await store.set(K_DRAFT, JSON.stringify(draft));
       if (viewing === null) writeForm(draft);
@@ -1256,6 +1364,7 @@ async function applyVoyEdit(){
     const el = $('voy' + k[0].toUpperCase() + k.slice(1));
     if (el) v[k] = el.value;
   });
+  markDirty('voyages', v);
   await saveVoy();
   recalcChain();
   await persist(); await store.set(K_DRAFT, JSON.stringify(draft));
@@ -1286,11 +1395,12 @@ $('voySel').onchange = async () => {
 $('voyNew').onclick = async () => {
   if (!confirm('Начать новый переход? Текущий будет помечен завершённым. Стартовые показания счётчиков нужно будет ввести вручную.')) return;
   const cur = activeV();
-  if (cur) cur.closed = true;
+  if (cur){ cur.closed = true; markDirty('voyages', cur); }
   const v = { id:uid(), from: cur ? (cur.to || '') : '', to:'', start:'', dtg:'', cp: cur ? (cur.cp || '') : '',
               startTime:'12:00',
               sGpsRd:'', sGps:'', sLogRd:'', sLog:'', sMeRh:'', sMeRev:'', closed:false };
   voyages.push(v);
+  markDirty('voyages', v);
   activeVoy = v.id;
   histVoy = null;
   if (draft) draft.voyageId = activeVoy;
@@ -1311,6 +1421,7 @@ $('voyClose').onclick = async () => {
     if (!confirm('Завершить переход ' + route + '? Все репорты останутся в истории.')) return;
   }
   v.closed = !v.closed;
+  markDirty('voyages', v);
   await saveVoy(); renderVoy();
   if (v.closed) window.scrollTo({top:0, behavior:'smooth'});   // наверх, к итоговой карточке
   toast(v.closed ? 'Переход завершён' : 'Переход снова в работе');
@@ -1501,17 +1612,15 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
     const old = await store.get('noonreport.voyage.v1');
     let seed = {};
     if (old){ try { seed = JSON.parse(old) || {}; } catch {} }
-    voyages = [{ id:uid(), from:'', to:'', start:seed.start||'', dtg:seed.dtg||'', cp:seed.cp||'',
-                 startTime:'12:00',
-                 sGpsRd:'', sGps:'', sLogRd:'', sLog:'', sMeRh:'', sMeRev:'', closed:false }];
-    activeVoy = voyages[0].id;
-    entries.forEach(e => { if (!e.voyageId) e.voyageId = activeVoy; });
-    if (draft) draft.voyageId = activeVoy;
-    await saveVoy(); await persist();
+    await ensureVoyage(seed);
   }
   if (!voyById(activeVoy)) activeVoy = voyages[0].id;
   entries.forEach(e => { if (!e.voyageId) e.voyageId = activeVoy; });
   if (draft && !draft.voyageId) draft.voyageId = activeVoy;
+
+  // миграция: постоянные id и время правки — нужны облаку
+  if (ensureIds()){ await persist(); await saveVoy(); }
+  await loadSyncState();
 
   recalcChain();
   if (await store.get('noonreport.voyopen') === '1') $('voySec').classList.remove('collapsed');
@@ -1523,7 +1632,338 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
   setMode(null);
   renderVoy();
   render();
+  cloudInit();
 })();
+
+/* ============================================================
+   ОБЛАКО: синхронизация с Supabase через обычный fetch.
+   Локальные данные — главные. Схема: отправить своё → забрать чужое →
+   пересчитать цепочку. Конфликт по updatedAt (кто позже правил, тот прав).
+   ============================================================ */
+let dirty = { entries:{}, voyages:{} };
+let tombs = [];
+let auth  = null;                 // {access_token, refresh_token, exp, email}
+const sync = { since:null, lastOk:null, err:'', busy:false, again:false, timer:null };
+
+const migId = e => 'm_' + (e.date||'') + '_' + (e.rtype||'NOON') + '_' + (e.seq||0);
+/* старым записям — id, выводимый из даты/типа/номера: один и тот же репорт
+   на двух устройствах получит один id, а не два разных */
+function ensureIds(){
+  let changed = false;
+  entries.forEach(e => {
+    if (!e.id){ e.id = migId(e); changed = true; }
+    if (e.updatedAt == null){ e.updatedAt = Date.parse(e.editedAt || e.closedAt || '') || 0; changed = true; }
+  });
+  voyages.forEach(v => { if (v.updatedAt == null){ v.updatedAt = 0; changed = true; } });
+  return changed;
+}
+async function ensureVoyage(seed){
+  seed = seed || {};
+  if (voyages.length) return;
+  voyages = [{ id:uid(), from:'', to:'', start:seed.start||'', dtg:seed.dtg||'', cp:seed.cp||'',
+               startTime:'12:00', sGpsRd:'', sGps:'', sLogRd:'', sLog:'', sMeRh:'', sMeRev:'', closed:false, updatedAt:0 }];
+  activeVoy = voyages[0].id;
+  entries.forEach(e => { if (!e.voyageId) e.voyageId = activeVoy; });
+  if (draft) draft.voyageId = activeVoy;
+  await saveVoy(); await persist();
+}
+
+async function saveDirty(){ await store.set(K_DIRTY, JSON.stringify(dirty)); await store.set(K_TOMB, JSON.stringify(tombs)); }
+async function saveSyncState(){ await store.set(K_SYNC, JSON.stringify({ since:sync.since, lastOk:sync.lastOk })); }
+async function loadSyncState(){
+  try { const d = JSON.parse(await store.get(K_DIRTY) || ''); if (d && d.entries) dirty = d; } catch {}
+  try { tombs = JSON.parse(await store.get(K_TOMB) || '') || []; } catch { tombs = []; }
+  try { const st = JSON.parse(await store.get(K_SYNC) || ''); if (st){ sync.since = st.since || null; sync.lastOk = st.lastOk || null; } } catch {}
+  try { auth = JSON.parse(await store.get(K_AUTH) || '') || null; } catch { auth = null; }
+}
+function markDirty(t, o){
+  o.updatedAt = Date.now();
+  if (!o.id) o.id = uid();
+  dirty[t][o.id] = 1;
+  saveDirty(); scheduleSync(2000);
+}
+function markDeleted(t, o){
+  if (!o.id) return;
+  delete dirty[t][o.id];
+  tombs.push({ t, id:o.id, updatedAt: Date.now() });
+  saveDirty(); scheduleSync(2000);
+}
+const pendingCount = () => Object.keys(dirty.entries).length + Object.keys(dirty.voyages).length + tombs.length;
+
+/* ---- запросы ---- */
+function withTimeout(ms){
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  return { signal: ctl.signal, done: () => clearTimeout(t) };
+}
+async function authFetch(grant, body){
+  const w = withTimeout(20000);
+  let res, j = {};
+  try {
+    res = await fetch(SB_URL + '/auth/v1/token?grant_type=' + grant,
+      { method:'POST', headers:{ apikey:SB_KEY, 'Content-Type':'application/json' }, body:JSON.stringify(body), signal:w.signal });
+  } catch { throw Object.assign(new Error('Нет связи'), { net:true }); }
+  finally { w.done(); }
+  try { j = await res.json(); } catch {}
+  if (!res.ok) throw Object.assign(new Error(j.error_description || j.msg || j.error || ('HTTP ' + res.status)), { status:res.status });
+  auth = { access_token:j.access_token, refresh_token:j.refresh_token,
+           exp: Date.now() + ((j.expires_in || 3600) - 60) * 1000,
+           email: (j.user && j.user.email) || (auth && auth.email) || body.email || '' };
+  await store.set(K_AUTH, JSON.stringify(auth));
+}
+async function signOut(){
+  auth = null; await store.set(K_AUTH, '');
+  sync.err = ''; setCloud(); renderCloud();
+}
+async function refreshAuth(force){
+  if (!auth) throw Object.assign(new Error('Нужно войти'), { status:401 });
+  if (!force && auth.exp > Date.now()) return;
+  try { await authFetch('refresh_token', { refresh_token: auth.refresh_token }); }
+  catch (e){
+    if (e.status && e.status < 500){ auth = null; await store.set(K_AUTH, ''); throw Object.assign(new Error('Вход истёк — войди заново'), { status:401 }); }
+    throw e;
+  }
+}
+async function sbFetch(path, opt, retry){
+  opt = opt || {};
+  await refreshAuth(false);
+  const w = withTimeout(25000);
+  let res;
+  try {
+    res = await fetch(SB_URL + path, { method: opt.method || 'GET', body: opt.body, signal: w.signal,
+      headers: { apikey:SB_KEY, Authorization:'Bearer ' + auth.access_token, 'Content-Type':'application/json', ...(opt.headers || {}) } });
+  } catch { throw Object.assign(new Error('Нет связи'), { net:true }); }
+  finally { w.done(); }
+  if (res.status === 401 && retry !== false){ await refreshAuth(true); return sbFetch(path, opt, false); }
+  if (!res.ok){
+    const t = await res.text().catch(() => '');
+    throw Object.assign(new Error('Сервер: ' + res.status + ' ' + t.slice(0, 160)), { status:res.status });
+  }
+  return res;
+}
+
+/* ---- отправка ---- */
+const clean = o => { const r = {}; Object.keys(o).forEach(k => { if (k[0] !== '_') r[k] = o[k]; }); return r; };
+function rowOf(t, o){
+  const r = { id:o.id, data:clean(o), updated_at:o.updatedAt || 0, deleted:false };
+  if (t === 'entries'){ r.voyage_id = o.voyageId || ''; r.date = o.date || ''; r.rtype = o.rtype || 'NOON'; r.seq = o.seq || 0; }
+  return r;
+}
+function tombRow(t, x){
+  const r = { id:x.id, data:{}, updated_at:x.updatedAt || 0, deleted:true };
+  if (t === 'entries'){ r.voyage_id = ''; r.date = ''; r.rtype = ''; r.seq = 0; }
+  return r;
+}
+async function pushAll(){
+  for (const t of ['voyages','entries']){
+    const list = t === 'entries' ? entries : voyages;
+    const snap = {};                                  // что именно отправляем — потом чистим только это
+    const rows = [];
+    Object.keys(dirty[t]).forEach(id => {
+      const o = list.find(x => x.id === id);
+      if (!o){ delete dirty[t][id]; return; }       // уже удалено — есть надгробие
+      snap[id] = o.updatedAt || 0; rows.push(rowOf(t, o));
+    });
+    const tl = tombs.filter(x => x.t === t);
+    const all = rows.concat(tl.map(x => tombRow(t, x)));
+    for (let i = 0; i < all.length; i += 200){
+      await sbFetch('/rest/v1/' + t, { method:'POST', body: JSON.stringify(all.slice(i, i + 200)),
+        headers: { Prefer:'resolution=merge-duplicates,return=minimal' } });
+    }
+    Object.keys(snap).forEach(id => { const o = list.find(x => x.id === id); if (o && (o.updatedAt || 0) === snap[id]) delete dirty[t][id]; });
+    tombs = tombs.filter(x => !tl.includes(x));
+    await saveDirty();
+  }
+}
+
+/* ---- приём и слияние ---- */
+function mergeRow(t, r){
+  const list = t === 'entries' ? entries : voyages;
+  const i = list.findIndex(o => o.id === r.id);
+  const local = i > -1 ? list[i] : null;
+  const ru = r.updated_at || 0;
+  if (local && dirty[t][r.id] && (local.updatedAt || 0) >= ru) return false;      // моя правка новее — уйдёт при отправке
+  const tb = tombs.findIndex(x => x.t === t && x.id === r.id);
+  if (tb > -1 && tombs[tb].updatedAt >= ru) return false;                           // моё удаление новее
+  if (tb > -1) tombs.splice(tb, 1);
+  if (r.deleted){
+    if (!local) return false;
+    list.splice(i, 1); delete dirty[t][r.id]; return true;
+  }
+  if (local && (local.updatedAt || 0) > ru){ dirty[t][r.id] = 1; return false; }   // у меня новее, но не отправлено — отправим
+  if (local && (local.updatedAt || 0) === ru) return false;
+  const o = r.data || {}; o.id = r.id; o.updatedAt = ru;
+  if (local) list[i] = o; else list.push(o);
+  delete dirty[t][r.id];
+  return true;
+}
+async function pullAll(){
+  const from = sync.since || '1970-01-01T00:00:00+00:00';
+  let newest = sync.since || '';
+  const changed = new Set();
+  const hadNone = !entries.length;
+  for (const t of ['voyages','entries']){
+    for (let off = 0; ; off += 500){
+      const q = '/rest/v1/' + t + '?select=id,data,updated_at,deleted,server_at&server_at=gte.' + encodeURIComponent(from)
+              + '&order=server_at.asc,id.asc&limit=500&offset=' + off;
+      const rows = await (await sbFetch(q)).json();
+      rows.forEach(r => { if (mergeRow(t, r)) changed.add(t + ':' + r.id); if (r.server_at > newest) newest = r.server_at; });
+      if (rows.length < 500) break;
+    }
+  }
+  if (newest) sync.since = newest;
+  if (changed.size) await applyPulled(changed, hadNone);
+}
+/* пустой переход, заведённый автоматически на новом устройстве, после прихода
+   настоящих переходов из облака не нужен */
+const blankVoy = v => !v.from && !v.to && !v.start && !v.dtg && !(v.updatedAt > 0) &&
+  ['sGpsRd','sGps','sLogRd','sLog','sMeRh','sMeRev'].every(k => !v[k]);
+async function applyPulled(changed, hadNone){
+  const viewId = viewing !== null && entries[viewing] ? entries[viewing].id : null;
+  if (voyages.length > 1){
+    voyages = voyages.filter(v => !(blankVoy(v) && !dirty.voyages[v.id] && !entries.some(e => e.voyageId === v.id)));
+  }
+  await ensureVoyage();
+  if (!voyById(activeVoy) || (hadNone && blankVoy(voyById(activeVoy)) && voyages.length > 1)){
+    const open = voyages.filter(v => !v.closed);
+    activeVoy = (open.length ? open[open.length - 1] : voyages[voyages.length - 1]).id;
+    if (draft) draft.voyageId = activeVoy;
+  }
+  entries.forEach(e => { if (!e.voyageId) e.voyageId = activeVoy; });
+  recalcChain();
+  if (hadNone && entries.length){            // новое устройство: бланк — от последнего репорта, как после закрытия
+    draft = blankFrom(entries[0]); draft.voyageId = activeVoy; recalcChain();
+  }
+  await persist(); await saveVoy(); await saveDirty(); await store.set(K_DRAFT, JSON.stringify(draft));
+  if (viewId !== null){
+    const ni = entries.findIndex(e => e.id === viewId);
+    if (ni === -1){ backToDraft(); toast('Открытый репорт удалён на другом устройстве'); }
+    else { viewing = ni; if (changed.has('entries:' + viewId)) writeForm(entries[ni]); }
+  } else if (changed.size) writeForm(draft);
+  renderVoy(); render();
+}
+
+/* ---- запуск ---- */
+function scheduleSync(ms){
+  if (!SB_URL || !auth) return;
+  clearTimeout(sync.timer);
+  sync.timer = setTimeout(() => runSync(), ms);
+}
+async function runSync(){
+  if (!SB_URL || !auth){ setCloud(); return; }
+  if (!sync.since && entries.length){   // первое подключение: сначала выбрать, чьи данные главнее
+    sync.err = 'Первое подключение: выбери, что делать с репортами на этом устройстве.';
+    setCloud(); renderCloud(); return;
+  }
+  if (sync.busy){ sync.again = true; return; }
+  sync.busy = true; setCloud(); renderCloud();
+  try {
+    await pushAll();
+    await pullAll();
+    sync.lastOk = Date.now(); sync.err = '';
+    await saveSyncState();
+  } catch (e){
+    sync.err = e.message || String(e);
+  } finally {
+    sync.busy = false; setCloud(); renderCloud();
+    if (sync.again){ sync.again = false; scheduleSync(1000); }
+  }
+}
+async function pushEverything(){
+  entries.forEach(e => { dirty.entries[e.id] = 1; });
+  voyages.forEach(v => { dirty.voyages[v.id] = 1; });
+  if (!sync.since) sync.since = '1970-01-01T00:00:00+00:00';   // первое подключение сделано
+  await saveDirty();
+  await runSync();
+}
+async function replaceFromCloud(){
+  entries = []; voyages = []; tombs = []; dirty = { entries:{}, voyages:{} };
+  sync.since = null; histVoy = null;
+  if (viewing !== null) setMode(null);
+  await saveDirty(); await saveSyncState(); await persist(); await saveVoy();
+  await runSync();
+  await ensureVoyage();
+  if (!voyById(activeVoy)) activeVoy = voyages[voyages.length - 1].id;
+  draft = blankFrom(null); draft.voyageId = activeVoy;
+  recalcChain(); await persist(); await saveVoy(); await store.set(K_DRAFT, JSON.stringify(draft));
+  writeForm(draft); renderVoy(); render();
+}
+
+/* ---- интерфейс ---- */
+const hhmmOf = ms => { const d = new Date(ms); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); };
+function setCloud(){
+  const b = $('cloudBtn');
+  if (!SB_URL){ b.style.display = 'none'; return; }
+  b.style.display = '';
+  const n = pendingCount();
+  let cls = '', txt = '';
+  if (!auth){ cls = 'warn'; txt = 'войти'; }
+  else if (!sync.since && entries.length){ cls = 'warn'; txt = 'настроить'; }
+  else if (sync.busy){ cls = 'busy'; txt = 'обмен…'; }
+  else if (!navigator.onLine){ cls = n ? 'pend' : ''; txt = n ? n + ' ждут' : 'офлайн'; }
+  else if (sync.err){ cls = 'warn'; txt = n ? n + ' ждут' : 'ошибка'; }
+  else if (n){ cls = 'pend'; txt = n + ' ждут'; }
+  else { cls = 'ok'; txt = sync.lastOk ? hhmmOf(sync.lastOk) : 'готово'; }
+  b.className = 'cloud ' + cls;
+  $('cloudLbl').textContent = txt;
+}
+function renderCloud(){
+  if (!$('cloudSheet').classList.contains('on')) return;
+  $('cloudLogin').style.display = auth ? 'none' : '';
+  $('cloudMain').style.display  = auth ? '' : 'none';
+  if (!auth) return;
+  const n = pendingCount();
+  $('cloudWho').textContent = auth.email || '—';
+  $('cloudState').textContent = sync.busy ? 'идёт обмен…' : !navigator.onLine ? 'нет сети' : sync.err ? 'ошибка' : 'в порядке';
+  $('cloudLast').textContent = sync.lastOk ? new Date(sync.lastOk).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : 'ещё не было';
+  $('cloudPend').textContent = n ? String(n) : 'нет';
+  $('cloudErr').textContent = sync.err || '';
+  $('cloudFirst').style.display = (!sync.since && entries.length) ? '' : 'none';
+  $('cloudSync').disabled = sync.busy;
+}
+function openCloud(){ $('cloudSheet').classList.add('on'); renderCloud(); if (!auth) $('cloudEmail').focus(); }
+function closeCloud(){ $('cloudSheet').classList.remove('on'); }
+$('cloudBtn').onclick = openCloud;
+$('cloudX').onclick = closeCloud;
+$('cloudSheet').addEventListener('click', e => { if (e.target === $('cloudSheet')) closeCloud(); });
+$('cloudIn').onclick = async () => {
+  const email = $('cloudEmail').value.trim(), pass = $('cloudPass').value;
+  if (!email || !pass){ $('cloudLoginErr').textContent = 'Введи e-mail и пароль'; return; }
+  $('cloudIn').disabled = true; $('cloudLoginErr').textContent = '';
+  try {
+    await authFetch('password', { email, password: pass });
+    $('cloudPass').value = '';
+    sync.err = '';
+    setCloud(); renderCloud();
+    if (sync.since || !entries.length) runSync();   // пустое устройство — просто забираем облако
+  } catch (e){
+    $('cloudLoginErr').textContent = e.status === 400 ? 'Неверный e-mail или пароль' : (e.message || 'Не вышло');
+  } finally { $('cloudIn').disabled = false; }
+};
+$('cloudPass').addEventListener('keydown', e => { if (e.key === 'Enter') $('cloudIn').click(); });
+$('cloudSync').onclick = () => runSync();
+$('cloudOut').onclick = async () => { if (confirm('Выйти из облака на этом устройстве? Данные останутся на месте.')) await signOut(); };
+async function doPushAll(){
+  if (!confirm('Отправить все репорты и переходы с этого устройства в облако?')) return;
+  await pushEverything(); toast(sync.err ? 'Не вышло: ' + sync.err : 'Отправлено в облако');
+}
+async function doPullAll(){
+  if (!confirm('Стереть репорты и переходы на этом устройстве и взять всё из облака?')) return;
+  if (!confirm('Точно? Локальная копия будет удалена. Если сомневаешься — сначала нажми «Экспорт».')) return;
+  await replaceFromCloud(); toast(sync.err ? 'Не вышло: ' + sync.err : 'Взято из облака: ' + entries.length);
+}
+$('cloudPushAll').onclick = doPushAll;  $('cloudPushAll2').onclick = doPushAll;
+$('cloudPullAll').onclick = doPullAll;  $('cloudPullAll2').onclick = doPullAll;
+
+function cloudInit(){
+  setCloud();
+  if (!SB_URL) return;
+  window.addEventListener('online',  () => { setCloud(); scheduleSync(1500); });
+  window.addEventListener('offline', () => { setCloud(); renderCloud(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleSync(1500); });
+  setInterval(() => scheduleSync(0), 10 * 60 * 1000);
+  if (auth && (sync.since || !entries.length || pendingCount())) scheduleSync(800);
+}
 </script>
 </body>
 </html>

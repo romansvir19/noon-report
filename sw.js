@@ -1,6 +1,6 @@
 /* Сеть-первым для навигации и кода, кэш — запасной для офлайна.
    Свежая версия подхватывается сама при любой связи; без сети работает из кэша. */
-const V = 'noon-report-v44';
+const V = 'noon-report-v45';
 const FILES = [
   './',
   './index.html',
@@ -51,6 +51,7 @@ function fetchFresh(req){
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
+  if (url.origin !== location.origin) return;   // облако (Supabase) — мимо кэша, напрямую в сеть
   const fresh = e.request.mode === 'navigate'
              || /\.(html|js|json)$/.test(url.pathname)
              || url.pathname.endsWith('/');
