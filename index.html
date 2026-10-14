@@ -358,6 +358,10 @@
         <div class="inp"><input id="wxBft" type="number" inputmode="numeric" step="1" min="0" max="12"><span class="unit">Bft</span></div></label>
       <label class="f calc"><span>Wind speed</span>
         <div class="inp"><input id="wxMs" type="text" readonly><span class="unit">m/s</span></div></label>
+      <label class="f"><span>True wind direction</span>
+        <div class="inp"><input id="wxDirT" type="number" inputmode="numeric" step="1" min="0" max="360"><span class="unit">°</span></div></label>
+      <label class="f" id="wxDirRWrap"><span>Relative wind direction</span>
+        <div class="inp"><input id="wxDirR" type="number" inputmode="numeric" step="1" min="0" max="360"><span class="unit">°</span></div></label>
     </div>
   </div>
 </section>
@@ -697,7 +701,7 @@ const FIELDS = ['date','rtime','rtype','tz','tzPrev','datePrev','timePrev','hour
   'gpsRdPrev','gpsRdCurr','gpsPrev','dog','gpsCurr','sog',
   'logRdPrev','logRdCurr','logPrev','dtw','logCurr','stw',
   'meRhPrev','meRh','meRhCurr','meRevPrev','meRev','meRevCurr',
-  'mePwrTorsion','mePwrEst','curSpeed','curDir','course','wxBft','wxMs',
+  'mePwrTorsion','mePwrEst','curSpeed','curDir','course','wxBft','wxMs','wxDirT','wxDirR',
   'ae1Prev','ae1Curr','ae1Rh','ae2Prev','ae2Curr','ae2Rh','ae3Prev','ae3Curr','ae3Rh'];
 
 const store = {
@@ -788,6 +792,10 @@ function computeRec(o){
   const bft = num(o.wxBft);
   const br = (bft !== null && BFT[bft]) ? BFT[bft] : null;
   o.wxMs = br ? (bft === 12 ? '32.7+' : br[2] + '–' + br[3]) : '';
+  // относительное направление ветра: от носа по часовой = истинное − курс; без курса вводится руками
+  const wt = num(o.wxDirT);
+  o._wxRelAuto = wt !== null && crs !== null;
+  if (o._wxRelAuto) o.wxDirR = String(Math.round(((wt - crs) % 360 + 360) % 360));
 
   const est = num(o.mePwrEst);
   o.mePwrTorsion = est !== null ? fmt(est * SHAFT_K, 1) : '';
@@ -886,6 +894,8 @@ function paint(o){
     .forEach(f => $(f).value = o[f] ?? '');
   if (o._dirAuto) $('curDir').value = o.curDir ?? '';
   $('curDirWrap').classList.toggle('calc', !!o._dirAuto);
+  if (o._wxRelAuto) $('wxDirR').value = o.wxDirR ?? '';
+  $('wxDirRWrap').classList.toggle('calc', !!o._wxRelAuto);
   const ov = o.dlOver || {};
   DL.forEach(f => {
     const el = $(f);
@@ -1437,7 +1447,7 @@ $('night').onclick = async () => {
 };
 
 ['gpsRdPrev','gpsRdCurr','gpsPrev','logRdPrev','logRdCurr','logPrev','hours','date','tz',
- 'meRhPrev','meRh','meRevPrev','meRev','mePwrEst','curDir','course','wxBft',
+ 'meRhPrev','meRh','meRevPrev','meRev','mePwrEst','curDir','course','wxBft','wxDirT','wxDirR',
  'ae1Prev','ae1Rh','ae2Prev','ae2Rh','ae3Prev','ae3Rh']
   .forEach(id => {
     $(id).addEventListener('input', () => {
