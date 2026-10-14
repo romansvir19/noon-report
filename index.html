@@ -364,8 +364,6 @@
         <div class="inp"><input id="wxKn" type="number" inputmode="decimal" step="0.1"><span class="unit">kn</span></div></label>
       <label class="f calc"><span>Relative wind direction</span>
         <div class="inp"><input id="wxDirR" type="number" inputmode="numeric" step="1" min="0" max="360"><span class="unit">°</span></div></label>
-      <label class="f calc"><span>Relative wind speed</span>
-        <div class="inp"><input id="wxRelKn" type="number" inputmode="decimal" step="0.1"><span class="unit">kn</span></div></label>
     </div>
   </div>
 </section>
@@ -705,7 +703,7 @@ const FIELDS = ['date','rtime','rtype','tz','tzPrev','datePrev','timePrev','hour
   'gpsRdPrev','gpsRdCurr','gpsPrev','dog','gpsCurr','sog',
   'logRdPrev','logRdCurr','logPrev','dtw','logCurr','stw',
   'meRhPrev','meRh','meRhCurr','meRevPrev','meRev','meRevCurr',
-  'mePwrTorsion','mePwrEst','curSpeed','curDir','course','wxBft','wxMs','wxDirT','wxKn','wxDirR','wxRelKn',
+  'mePwrTorsion','mePwrEst','curSpeed','curDir','course','wxBft','wxMs','wxDirT','wxKn','wxDirR',
   'ae1Prev','ae1Curr','ae1Rh','ae2Prev','ae2Curr','ae2Rh','ae3Prev','ae3Curr','ae3Rh'];
 
 const store = {
@@ -801,7 +799,7 @@ function computeRec(o){
   // кажущийся ветер: вектор истинного ветра минус вектор судна (курс + SOG).
   // Направления метеорологические — «откуда дует»; относительное — от носа по часовой
   const wt = num(o.wxDirT), wk = num(o.wxKn), sg = num(o.sog);
-  let relDir = '', relKn = '';
+  let relDir = '';
   if (wt !== null && wk !== null && crs !== null && sg !== null){
     const rad = Math.PI / 180;
     const ax = -wk * Math.sin(wt * rad) - sg * Math.sin(crs * rad);   // куда движется воздух относительно судна
@@ -809,10 +807,8 @@ function computeRec(o){
     const spd = Math.hypot(ax, ay);
     const from = (Math.atan2(-ax, -ay) / rad + 360) % 360;             // откуда дует, истинный пеленг
     relDir = spd < 0.05 ? '' : String(Math.round(((from - crs) % 360 + 360) % 360));
-    relKn = fmt(spd, 1);
   }
-  if (pov.wxDirR === undefined)  o.wxDirR  = relDir;
-  if (pov.wxRelKn === undefined) o.wxRelKn = relKn;
+  if (pov.wxDirR === undefined) o.wxDirR = relDir;
 
   const est = num(o.mePwrEst);
   o.mePwrTorsion = est !== null ? fmt(est * SHAFT_K, 1) : '';
@@ -879,7 +875,7 @@ function deckLog(o, prev, v){
 
 let formOver = {};   // ручные правки журнала для записи, открытой в форме
 let prevOver = {};   // ручные правки автополей — цепочка и расчёт их не перезаписывают
-const CARRYT = new Set([...CARRY.map(c => c.to), 'hours', 'meRh', 'wxKn', 'wxDirR', 'wxRelKn']);
+const CARRYT = new Set([...CARRY.map(c => c.to), 'hours', 'meRh', 'wxKn', 'wxDirR']);
 
 function readForm(){
   const o = {};
@@ -919,7 +915,7 @@ function paint(o){
     el.closest('.f').classList.toggle('dlover', ov[f] !== undefined);
   });
   const pov = o.prevOver || {};
-  ['hours','meRh','wxKn','wxDirR','wxRelKn'].forEach(f => {
+  ['hours','meRh','wxKn','wxDirR'].forEach(f => {
     const el = $(f);
     if (document.activeElement !== el) el.value = o[f] ?? '';
   });
@@ -1463,7 +1459,7 @@ $('night').onclick = async () => {
 };
 
 ['gpsRdPrev','gpsRdCurr','gpsPrev','logRdPrev','logRdCurr','logPrev','hours','date','tz',
- 'meRhPrev','meRh','meRevPrev','meRev','mePwrEst','curDir','course','wxBft','wxDirT','wxKn','wxDirR','wxRelKn',
+ 'meRhPrev','meRh','meRevPrev','meRev','mePwrEst','curDir','course','wxBft','wxDirT','wxKn','wxDirR',
  'ae1Prev','ae1Rh','ae2Prev','ae2Rh','ae3Prev','ae3Rh']
   .forEach(id => {
     $(id).addEventListener('input', () => {
