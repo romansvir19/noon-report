@@ -587,6 +587,7 @@
         <div class="cl-row"><span>Состояние</span><b id="cloudState"></b></div>
         <div class="cl-row"><span>Последний обмен</span><b id="cloudLast"></b></div>
         <div class="cl-row"><span>Ждут отправки</span><b id="cloudPend"></b></div>
+        <div class="cl-row"><span>Версия приложения</span><b id="cloudVer"></b></div>
         <div class="cl-err" id="cloudErr"></div>
         <div class="seg" style="margin-top:14px">
           <button class="primary" id="cloudSync" type="button">Синхронизировать</button>
@@ -629,6 +630,7 @@ const K_NIGHT   = 'noonreport.night';
    ОБЛАКО (Supabase). Пусто — работаем как раньше, только локально.
    anon-ключ публичный по замыслу: доступ к данным режет RLS на сервере.
    ============================================================ */
+const APP_V = 53;   // поднимать вместе с версией в sw.js
 const SB_URL = 'https://wgqrozeqxsnfoiaevcle.supabase.co';
 const SB_KEY = 'sb_publishable_dDRrCczBXPVVCnmJtXPAfg_Sij56yJN';
 const K_DIRTY = 'noonreport.sync.dirty';       // {entries:{id:1}, voyages:{id:1}} — ещё не отправлено
@@ -1673,6 +1675,8 @@ const LIST = { entries: () => entries, voyages: () => voyages, reminders: () => 
 const TABLES = ['voyages', 'entries', 'reminders'];
 const OPTIONAL = { reminders:1, drafts:1 };   // таблицы второй очереди: их отсутствие не останавливает обмен репортами
 const draftId = () => auth && auth.uid ? 'draft_' + auth.uid : null;
+/* id пользователя из самого токена входа (поле sub) — не ждать обновления токена */
+const uidOf = tok => { try { return JSON.parse(atob(String(tok).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || ''; } catch { return ''; } };
 let auth  = null;                 // {access_token, refresh_token, exp, email}
 const sync = { since:null, lastOk:null, err:'', warn:'', busy:false, again:false, timer:null };
 
@@ -1745,6 +1749,7 @@ async function loadSyncState(){
   let st = null;
   try { st = JSON.parse(await store.get(K_SYNC) || ''); if (st){ sync.since = st.since || null; sync.lastOk = st.lastOk || null; } } catch {}
   try { auth = JSON.parse(await store.get(K_AUTH) || '') || null; } catch { auth = null; }
+  if (auth && !auth.uid){ auth.uid = uidOf(auth.access_token); await store.set(K_AUTH, JSON.stringify(auth)); }
   draftJson = draftSnap(draft);
   // обновление с первой версии облака: заметки и заполненный черновик — тоже в облако
   if (st && st.v !== 2 && sync.since){
@@ -1786,7 +1791,7 @@ async function authFetch(grant, body){
   auth = { access_token:j.access_token, refresh_token:j.refresh_token,
            exp: Date.now() + ((j.expires_in || 3600) - 60) * 1000,
            email: (j.user && j.user.email) || (auth && auth.email) || body.email || '',
-           uid:   (j.user && j.user.id) || (auth && auth.uid) || '' };
+           uid:   (j.user && j.user.id) || uidOf(j.access_token) || (auth && auth.uid) || '' };
   await store.set(K_AUTH, JSON.stringify(auth));
 }
 async function signOut(){
@@ -2033,6 +2038,7 @@ function renderCloud(){
   $('cloudState').textContent = sync.busy ? 'идёт обмен…' : !navigator.onLine ? 'нет сети' : sync.err ? 'ошибка' : 'в порядке';
   $('cloudLast').textContent = sync.lastOk ? new Date(sync.lastOk).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : 'ещё не было';
   $('cloudPend').textContent = n ? String(n) : 'нет';
+  $('cloudVer').textContent = 'v' + APP_V + (dirty.draft ? ' · черновик ждёт отправки' : '');
   $('cloudErr').textContent = [sync.err, sync.warn].filter(Boolean).join('\n');
   $('cloudFirst').style.display = (!sync.since && entries.length) ? '' : 'none';
   $('cloudSync').disabled = sync.busy;
