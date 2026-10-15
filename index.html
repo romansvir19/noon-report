@@ -24,7 +24,7 @@
     --logbg:#170703; --logline:#6b3a10; --logink:#ffb27a;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  body{margin:0;padding:14px 14px 70px;background:var(--bg);color:var(--ink);
+  body{margin:0;padding:calc(14px + env(safe-area-inset-top,0px)) 14px 70px;background:var(--bg);color:var(--ink);
     font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
   .wrap{max-width:1080px;margin:0 auto}
   header.top{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
@@ -190,13 +190,18 @@
   button.cloud.warn .dot{background:var(--warn)}
   button.cloud.pend .dot{background:#d99a1e}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
-  .sheet{position:fixed;inset:0;background:rgba(10,20,30,.45);display:none;z-index:8;align-items:flex-end;justify-content:center;padding:0}
+  .sheet{position:fixed;inset:0;background:rgba(10,20,30,.45);display:none;z-index:8;align-items:flex-start;justify-content:center;padding:0}
   .sheet.on{display:flex}
-  .sheet-box{background:var(--card);border:1px solid var(--line);border-radius:16px 16px 0 0;width:100%;max-width:560px;
-    max-height:92vh;overflow:auto;padding-bottom:max(14px,env(safe-area-inset-bottom));animation:slideup .22s ease}
-  @media (min-width:600px){ .sheet{align-items:center;padding:20px} .sheet-box{border-radius:var(--radius)} }
+  .sheet-box{background:var(--card);border:1px solid var(--line);width:100%;max-width:560px;height:100%;
+    overflow:auto;-webkit-overflow-scrolling:touch;padding-bottom:max(14px,env(safe-area-inset-bottom));animation:slideup .22s ease}
+  .sheet-box .sec-h{display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:1;
+    padding-top:calc(11px + env(safe-area-inset-top,0px))}
+  @media (min-width:600px){
+    .sheet{align-items:center;padding:20px}
+    .sheet-box{height:auto;max-height:92vh;border-radius:var(--radius)}
+    .sheet-box .sec-h{padding-top:11px}
+  }
   @keyframes slideup{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
-  .sheet-box .sec-h{display:flex;align-items:center;gap:8px;position:sticky;top:0}
   .sheet-box .sec-h .x{margin-left:auto;min-height:32px;padding:4px 10px;font-size:14px}
   .cl-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
   .cl-row span{color:var(--muted)}
