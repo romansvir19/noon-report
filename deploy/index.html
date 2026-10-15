@@ -572,8 +572,8 @@
     <div class="sec-b">
 
       <div id="cloudLogin" class="login">
-        <div class="hint" style="margin:0 0 14px">Один аккаунт на все устройства. После входа репорты и переходы
-          сами уходят в облако и приходят с других устройств — при любой связи, без твоего участия.</div>
+        <div class="hint" style="margin:0 0 14px">Один аккаунт на все устройства. После входа репорты, переходы, заметки и текущий
+          черновик сами уходят в облако и приходят с других устройств — при любой связи, без твоего участия.</div>
         <label class="f"><span>E-mail</span>
           <div class="inp"><input id="cloudEmail" type="email" autocomplete="username" inputmode="email" autocapitalize="none"></div></label>
         <label class="f"><span>Пароль</span>
@@ -1026,7 +1026,7 @@ function recalc(){
 }
 
 let dt;
-function saveDraft(){ clearTimeout(dt); dt = setTimeout(() => store.set(K_DRAFT, JSON.stringify(draft)), 300); }
+function saveDraft(){ clearTimeout(dt); dt = setTimeout(() => store.set(K_DRAFT, JSON.stringify(draft)), 300); markDraft(); }
 async function persist(){ await store.set(K_ENTRIES, JSON.stringify(entries)); }
 
 /* дата в 'YYYY-MM-DD' по местному времени — toISOString() здесь нельзя:
@@ -1229,6 +1229,7 @@ $('close').onclick = async () => {
   draft.voyageId = activeVoy;
   recalcChain();
   await persist(); await store.set(K_DRAFT, JSON.stringify(draft));
+  markDraft();
   writeForm(draft);
   renderVoy(); render();
 
@@ -1416,6 +1417,7 @@ $('voySel').onchange = async () => {
   await saveVoy();
   recalcChain();
   await store.set(K_DRAFT, JSON.stringify(draft));
+  markDraft();
   writeForm(draft); renderVoy(); render();
 };
 
@@ -1434,6 +1436,7 @@ $('voyNew').onclick = async () => {
   await saveVoy();
   recalcChain();
   await persist(); await store.set(K_DRAFT, JSON.stringify(draft));
+  markDraft();
   writeForm(draft); renderVoy(); render();
   $('voySec').classList.remove('collapsed');
   $('voySec').scrollIntoView({behavior:'smooth', block:'start'});
@@ -1531,6 +1534,7 @@ function remRow(r, dateStr){
         r.done = r.done || {};
         if (cb.checked) r.done[key] = true; else delete r.done[key];
       }
+      markDirty('reminders', r);
       await saveRem(); renderRem();
     };
     row.appendChild(cb);
@@ -1569,7 +1573,9 @@ $('remToggle').onclick = () => {
 $('remAdd').onclick = async () => {
   const text = $('remText').value.trim();
   if (!text){ toast('Напиши текст заметки'); $('remText').focus(); return; }
-  rems.push({ id: uid(), kind:'note', text, doneAt: null, imp: $('remImp').checked });
+  const nr = { id: uid(), kind:'note', text, doneAt: null, imp: $('remImp').checked };
+  rems.push(nr);
+  markDirty('reminders', nr);
   await saveRem();
   $('remText').value = '';
   $('remImp').checked = false;
@@ -1619,20 +1625,13 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
   if (rawRem){ try { rems = JSON.parse(rawRem) || []; } catch { rems = []; } }
   else {
     // первый запуск: постоянные дела недели (неудаляемые)
-    rems = [
-      { id: uid(), kind:'week', day:4, text:'Обновить карты',            imp:true, lock:true, done:{} },
-      { id: uid(), kind:'week', day:6, text:'Тесты GMDSS оборудования',  imp:true, lock:true, done:{} }
-    ];
+    rems = defaultRems();
     await saveRem();
   }
   // миграция: встроенные недельные дела помечаем неудаляемыми
   rems.forEach(r => {
     if (r.kind === 'week' && (r.text === 'Обновить карты' || r.text === 'Тесты GMDSS оборудования')) r.lock = true;
   });
-  // уборка: отмеченные галочкой заметки за прошедшие дни убираем насовсем
-  const remToday = isoLocal(new Date());
-  rems = rems.filter(r => !(r.kind === 'date' && r.done && r.done[r.date] && r.date < remToday));
-  rems = rems.filter(r => !((r.kind === 'task' || r.kind === 'note') && r.doneAt && r.doneAt < remToday));
 
   // миграция: рейсов ещё нет — заводим первый и относим к нему всё старое
   if (!voyages.length){
@@ -1646,8 +1645,9 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
   if (draft && !draft.voyageId) draft.voyageId = activeVoy;
 
   // миграция: постоянные id и время правки — нужны облаку
-  if (ensureIds()){ await persist(); await saveVoy(); }
+  if (ensureIds()){ await persist(); await saveVoy(); await saveRem(); }
   await loadSyncState();
+  await cleanRems();
 
   recalcChain();
   if (await store.get('noonreport.voyopen') === '1') $('voySec').classList.remove('collapsed');
@@ -1667,10 +1667,14 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
    Локальные данные — главные. Схема: отправить своё → забрать чужое →
    пересчитать цепочку. Конфликт по updatedAt (кто позже правил, тот прав).
    ============================================================ */
-let dirty = { entries:{}, voyages:{} };
+let dirty = { entries:{}, voyages:{}, reminders:{}, draft:0 };
 let tombs = [];
+const LIST = { entries: () => entries, voyages: () => voyages, reminders: () => rems };
+const TABLES = ['voyages', 'entries', 'reminders'];
+const OPTIONAL = { reminders:1, drafts:1 };   // таблицы второй очереди: их отсутствие не останавливает обмен репортами
+const draftId = () => auth && auth.uid ? 'draft_' + auth.uid : null;
 let auth  = null;                 // {access_token, refresh_token, exp, email}
-const sync = { since:null, lastOk:null, err:'', busy:false, again:false, timer:null };
+const sync = { since:null, lastOk:null, err:'', warn:'', busy:false, again:false, timer:null };
 
 const migId = e => 'm_' + (e.date||'') + '_' + (e.rtype||'NOON') + '_' + (e.seq||0);
 /* старым записям — id, выводимый из даты/типа/номера: один и тот же репорт
@@ -1682,7 +1686,45 @@ function ensureIds(){
     if (e.updatedAt == null){ e.updatedAt = Date.parse(e.editedAt || e.closedAt || '') || 0; changed = true; }
   });
   voyages.forEach(v => { if (v.updatedAt == null){ v.updatedAt = 0; changed = true; } });
+  rems.forEach(r => {
+    // встроенные дела недели на всех устройствах — под одним id
+    const fixed = r.lock && r.kind === 'week' ? (r.day === 4 ? 'rem_week_charts' : r.day === 6 ? 'rem_week_gmdss' : null) : null;
+    if (fixed && r.id !== fixed){ r.id = fixed; changed = true; }
+    if (!r.id){ r.id = uid(); changed = true; }
+    if (r.updatedAt == null){ r.updatedAt = 0; changed = true; }
+  });
+  const seen = new Map(); rems.forEach(r => { if (!seen.has(r.id)) seen.set(r.id, r); });
+  if (seen.size !== rems.length){ rems = [...seen.values()]; changed = true; }
   return changed;
+}
+function defaultRems(){
+  return [
+    { id:'rem_week_charts', kind:'week', day:4, text:'Обновить карты',           imp:true, lock:true, done:{}, updatedAt:0 },
+    { id:'rem_week_gmdss',  kind:'week', day:6, text:'Тесты GMDSS оборудования', imp:true, lock:true, done:{}, updatedAt:0 }
+  ];
+}
+/* отмеченные галочкой заметки за прошедшие дни убираем насовсем — и докладываем облаку */
+async function cleanRems(){
+  const today = isoLocal(new Date());
+  const gone = rems.filter(r => (r.kind === 'date' && r.done && r.done[r.date] && r.date < today)
+                              || ((r.kind === 'task' || r.kind === 'note') && r.doneAt && r.doneAt < today));
+  if (!gone.length) return;
+  rems = rems.filter(r => !gone.includes(r));
+  gone.forEach(r => markDeleted('reminders', r));
+  await saveRem();
+}
+/* в черновике есть что-то, введённое руками (а не перенесённое из прошлого репорта) */
+const draftHasInput = d => !!d && ['gpsRdCurr','logRdCurr','meRev','mePwrEst','wxBft','wxDirT','course','ae1Rh','ae2Rh','ae3Rh']
+  .some(k => d[k] !== '' && d[k] != null);
+let draftJson = null;
+const draftSnap = d => { const c = clean(d || {}); delete c.updatedAt; return JSON.stringify(c); };
+function markDraft(){
+  if (!draft) return;
+  const j = draftSnap(draft);
+  if (draftJson === null){ draftJson = j; return; }   // первый вызов после загрузки — только запомнить
+  if (j === draftJson) return;
+  draftJson = j; draft.updatedAt = Date.now(); dirty.draft = 1;
+  saveDirty(); scheduleSync(2000);
 }
 async function ensureVoyage(seed){
   seed = seed || {};
@@ -1696,12 +1738,20 @@ async function ensureVoyage(seed){
 }
 
 async function saveDirty(){ await store.set(K_DIRTY, JSON.stringify(dirty)); await store.set(K_TOMB, JSON.stringify(tombs)); }
-async function saveSyncState(){ await store.set(K_SYNC, JSON.stringify({ since:sync.since, lastOk:sync.lastOk })); }
+async function saveSyncState(){ await store.set(K_SYNC, JSON.stringify({ since:sync.since, lastOk:sync.lastOk, v:2 })); }
 async function loadSyncState(){
-  try { const d = JSON.parse(await store.get(K_DIRTY) || ''); if (d && d.entries) dirty = d; } catch {}
+  try { const d = JSON.parse(await store.get(K_DIRTY) || ''); if (d && d.entries) dirty = { entries:{}, voyages:{}, reminders:{}, draft:0, ...d }; } catch {}
   try { tombs = JSON.parse(await store.get(K_TOMB) || '') || []; } catch { tombs = []; }
-  try { const st = JSON.parse(await store.get(K_SYNC) || ''); if (st){ sync.since = st.since || null; sync.lastOk = st.lastOk || null; } } catch {}
+  let st = null;
+  try { st = JSON.parse(await store.get(K_SYNC) || ''); if (st){ sync.since = st.since || null; sync.lastOk = st.lastOk || null; } } catch {}
   try { auth = JSON.parse(await store.get(K_AUTH) || '') || null; } catch { auth = null; }
+  draftJson = draftSnap(draft);
+  // обновление с первой версии облака: заметки и заполненный черновик — тоже в облако
+  if (st && st.v !== 2 && sync.since){
+    rems.forEach(r => { dirty.reminders[r.id] = 1; });
+    if (draftHasInput(draft)){ draft.updatedAt = Date.now(); dirty.draft = 1; await store.set(K_DRAFT, JSON.stringify(draft)); }
+    await saveDirty(); await saveSyncState();
+  }
 }
 function markDirty(t, o){
   o.updatedAt = Date.now();
@@ -1715,7 +1765,7 @@ function markDeleted(t, o){
   tombs.push({ t, id:o.id, updatedAt: Date.now() });
   saveDirty(); scheduleSync(2000);
 }
-const pendingCount = () => Object.keys(dirty.entries).length + Object.keys(dirty.voyages).length + tombs.length;
+const pendingCount = () => Object.keys(dirty.entries).length + Object.keys(dirty.voyages).length + Object.keys(dirty.reminders).length + tombs.length;   // черновик не считаем: он не «запись»
 
 /* ---- запросы ---- */
 function withTimeout(ms){
@@ -1735,7 +1785,8 @@ async function authFetch(grant, body){
   if (!res.ok) throw Object.assign(new Error(j.error_description || j.msg || j.error || ('HTTP ' + res.status)), { status:res.status });
   auth = { access_token:j.access_token, refresh_token:j.refresh_token,
            exp: Date.now() + ((j.expires_in || 3600) - 60) * 1000,
-           email: (j.user && j.user.email) || (auth && auth.email) || body.email || '' };
+           email: (j.user && j.user.email) || (auth && auth.email) || body.email || '',
+           uid:   (j.user && j.user.id) || (auth && auth.uid) || '' };
   await store.set(K_AUTH, JSON.stringify(auth));
 }
 async function signOut(){
@@ -1782,8 +1833,8 @@ function tombRow(t, x){
   return r;
 }
 async function pushAll(){
-  for (const t of ['voyages','entries']){
-    const list = t === 'entries' ? entries : voyages;
+  for (const t of TABLES){
+    const list = LIST[t]();
     const snap = {};                                  // что именно отправляем — потом чистим только это
     const rows = [];
     Object.keys(dirty[t]).forEach(id => {
@@ -1793,19 +1844,31 @@ async function pushAll(){
     });
     const tl = tombs.filter(x => x.t === t);
     const all = rows.concat(tl.map(x => tombRow(t, x)));
-    for (let i = 0; i < all.length; i += 200){
-      await sbFetch('/rest/v1/' + t, { method:'POST', body: JSON.stringify(all.slice(i, i + 200)),
-        headers: { Prefer:'resolution=merge-duplicates,return=minimal' } });
-    }
+    try {
+      for (let i = 0; i < all.length; i += 200){
+        await sbFetch('/rest/v1/' + t, { method:'POST', body: JSON.stringify(all.slice(i, i + 200)),
+          headers: { Prefer:'resolution=merge-duplicates,return=minimal' } });
+      }
+    } catch (e){ if (OPTIONAL[t] && e.status === 404){ sync.warn = WARN_V2; continue; } throw e; }
     Object.keys(snap).forEach(id => { const o = list.find(x => x.id === id); if (o && (o.updatedAt || 0) === snap[id]) delete dirty[t][id]; });
     tombs = tombs.filter(x => !tl.includes(x));
     await saveDirty();
   }
+  // черновик — один документ на пользователя
+  if (dirty.draft && draft && draftId()){
+    const at = draft.updatedAt || 0;
+    try {
+      await sbFetch('/rest/v1/drafts', { method:'POST', headers: { Prefer:'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify([{ id: draftId(), data: clean(draft), updated_at: at, deleted:false }]) });
+      if ((draft.updatedAt || 0) === at){ dirty.draft = 0; await saveDirty(); }
+    } catch (e){ if (e.status === 404) sync.warn = WARN_V2; else throw e; }
+  }
 }
+const WARN_V2 = 'Заметки и черновик пока не ходят в облако: в базе нет таблиц reminders и drafts. Выполни supabase/schema-v2.sql.';
 
 /* ---- приём и слияние ---- */
 function mergeRow(t, r){
-  const list = t === 'entries' ? entries : voyages;
+  const list = LIST[t]();
   const i = list.findIndex(o => o.id === r.id);
   const local = i > -1 ? list[i] : null;
   const ru = r.updated_at || 0;
@@ -1829,17 +1892,33 @@ async function pullAll(){
   let newest = sync.since || '';
   const changed = new Set();
   const hadNone = !entries.length;
-  for (const t of ['voyages','entries']){
-    for (let off = 0; ; off += 500){
-      const q = '/rest/v1/' + t + '?select=id,data,updated_at,deleted,server_at&server_at=gte.' + encodeURIComponent(from)
-              + '&order=server_at.asc,id.asc&limit=500&offset=' + off;
-      const rows = await (await sbFetch(q)).json();
-      rows.forEach(r => { if (mergeRow(t, r)) changed.add(t + ':' + r.id); if (r.server_at > newest) newest = r.server_at; });
-      if (rows.length < 500) break;
-    }
+  for (const t of [...TABLES, 'drafts']){
+    try {
+      for (let off = 0; ; off += 500){
+        const q = '/rest/v1/' + t + '?select=id,data,updated_at,deleted,server_at&server_at=gte.' + encodeURIComponent(from)
+                + '&order=server_at.asc,id.asc&limit=500&offset=' + off;
+        const rows = await (await sbFetch(q)).json();
+        rows.forEach(r => {
+          if (t === 'drafts'){ if (mergeDraft(r)) changed.add('draft'); }
+          else if (mergeRow(t, r)) changed.add(t + ':' + r.id);
+          if (r.server_at > newest) newest = r.server_at;
+        });
+        if (rows.length < 500) break;
+      }
+    } catch (e){ if (OPTIONAL[t] && e.status === 404){ sync.warn = WARN_V2; continue; } throw e; }
   }
   if (newest) sync.since = newest;
   if (changed.size) await applyPulled(changed, hadNone);
+}
+/* черновик с другого устройства: берём, если он новее моего и мой не ждёт отправки */
+function mergeDraft(r){
+  if (r.id !== draftId() || r.deleted) return false;
+  const ru = r.updated_at || 0, mine = (draft && draft.updatedAt) || 0;
+  if (mine >= ru) return false;
+  if (dirty.draft && mine >= ru) return false;
+  draft = r.data || {}; draft.updatedAt = ru;
+  dirty.draft = 0; draftJson = draftSnap(draft);
+  return true;
 }
 /* пустой переход, заведённый автоматически на новом устройстве, после прихода
    настоящих переходов из облака не нужен */
@@ -1857,10 +1936,15 @@ async function applyPulled(changed, hadNone){
     if (draft) draft.voyageId = activeVoy;
   }
   entries.forEach(e => { if (!e.voyageId) e.voyageId = activeVoy; });
+  if (changed.has('draft') && draft.voyageId && voyById(draft.voyageId) && draft.voyageId !== activeVoy){
+    activeVoy = draft.voyageId; histVoy = null;   // черновик пришёл вместе со своим переходом
+  }
+  if (!rems.length) rems = defaultRems();
   recalcChain();
-  if (hadNone && entries.length){            // новое устройство: бланк — от последнего репорта, как после закрытия
+  if (hadNone && entries.length && !changed.has('draft')){   // новое устройство: бланк — от последнего репорта, как после закрытия
     draft = blankFrom(entries[0]); draft.voyageId = activeVoy; recalcChain();
   }
+  await saveRem(); renderRem();
   await persist(); await saveVoy(); await saveDirty(); await store.set(K_DRAFT, JSON.stringify(draft));
   if (viewId !== null){
     const ni = entries.findIndex(e => e.id === viewId);
@@ -1885,6 +1969,7 @@ async function runSync(){
   if (sync.busy){ sync.again = true; return; }
   sync.busy = true; setCloud(); renderCloud();
   try {
+    sync.warn = '';
     await pushAll();
     await pullAll();
     sync.lastOk = Date.now(); sync.err = '';
@@ -1899,19 +1984,23 @@ async function runSync(){
 async function pushEverything(){
   entries.forEach(e => { dirty.entries[e.id] = 1; });
   voyages.forEach(v => { dirty.voyages[v.id] = 1; });
+  rems.forEach(r => { dirty.reminders[r.id] = 1; });
+  if (draft){ draft.updatedAt = Date.now(); dirty.draft = 1; draftJson = draftSnap(draft); await store.set(K_DRAFT, JSON.stringify(draft)); }
   if (!sync.since) sync.since = '1970-01-01T00:00:00+00:00';   // первое подключение сделано
   await saveDirty();
   await runSync();
 }
 async function replaceFromCloud(){
-  entries = []; voyages = []; tombs = []; dirty = { entries:{}, voyages:{} };
+  entries = []; voyages = []; rems = []; tombs = []; dirty = { entries:{}, voyages:{}, reminders:{}, draft:0 };
+  draft = blankFrom(null); draft.updatedAt = 0; draftJson = draftSnap(draft);
   sync.since = null; histVoy = null;
   if (viewing !== null) setMode(null);
-  await saveDirty(); await saveSyncState(); await persist(); await saveVoy();
+  await saveDirty(); await saveSyncState(); await persist(); await saveVoy(); await saveRem();
   await runSync();
   await ensureVoyage();
+  if (!rems.length){ rems = defaultRems(); await saveRem(); }
   if (!voyById(activeVoy)) activeVoy = voyages[voyages.length - 1].id;
-  draft = blankFrom(null); draft.voyageId = activeVoy;
+  if (!draft.voyageId || !voyById(draft.voyageId)) draft.voyageId = activeVoy;
   recalcChain(); await persist(); await saveVoy(); await store.set(K_DRAFT, JSON.stringify(draft));
   writeForm(draft); renderVoy(); render();
 }
@@ -1944,7 +2033,7 @@ function renderCloud(){
   $('cloudState').textContent = sync.busy ? 'идёт обмен…' : !navigator.onLine ? 'нет сети' : sync.err ? 'ошибка' : 'в порядке';
   $('cloudLast').textContent = sync.lastOk ? new Date(sync.lastOk).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : 'ещё не было';
   $('cloudPend').textContent = n ? String(n) : 'нет';
-  $('cloudErr').textContent = sync.err || '';
+  $('cloudErr').textContent = [sync.err, sync.warn].filter(Boolean).join('\n');
   $('cloudFirst').style.display = (!sync.since && entries.length) ? '' : 'none';
   $('cloudSync').disabled = sync.busy;
 }
@@ -1971,11 +2060,11 @@ $('cloudPass').addEventListener('keydown', e => { if (e.key === 'Enter') $('clou
 $('cloudSync').onclick = () => runSync();
 $('cloudOut').onclick = async () => { if (confirm('Выйти из облака на этом устройстве? Данные останутся на месте.')) await signOut(); };
 async function doPushAll(){
-  if (!confirm('Отправить все репорты и переходы с этого устройства в облако?')) return;
+  if (!confirm('Отправить все репорты, переходы, заметки и черновик с этого устройства в облако?')) return;
   await pushEverything(); toast(sync.err ? 'Не вышло: ' + sync.err : 'Отправлено в облако');
 }
 async function doPullAll(){
-  if (!confirm('Стереть репорты и переходы на этом устройстве и взять всё из облака?')) return;
+  if (!confirm('Стереть репорты, переходы и заметки на этом устройстве и взять всё из облака?')) return;
   if (!confirm('Точно? Локальная копия будет удалена. Если сомневаешься — сначала нажми «Экспорт».')) return;
   await replaceFromCloud(); toast(sync.err ? 'Не вышло: ' + sync.err : 'Взято из облака: ' + entries.length);
 }
