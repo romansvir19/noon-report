@@ -1,8 +1,6 @@
 # Бесплатный проект Supabase засыпает после недели без запросов.
-# Раз в сутки дёргаем REST — проект считается живым.
-# Нужны две переменные репозитория (Settings → Secrets and variables → Actions → Variables):
-#   SUPABASE_URL      — https://xxxx.supabase.co
-#   SUPABASE_ANON_KEY — anon public key
+# Раз в сутки делаем один запрос — проект считается живым.
+# Ключ публичный (тот же, что в index.html), доступ к данным режет RLS.
 name: keepalive
 on:
   schedule:
@@ -14,8 +12,6 @@ jobs:
     steps:
       - name: ping Supabase
         run: |
-          test -n "${{ vars.SUPABASE_URL }}" || { echo "SUPABASE_URL не задан"; exit 1; }
           curl -sS -o /dev/null -w "HTTP %{http_code}\n" \
-            "${{ vars.SUPABASE_URL }}/rest/v1/voyages?select=id&limit=1" \
-            -H "apikey: ${{ vars.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ vars.SUPABASE_ANON_KEY }}"
+            "https://wgqrozeqxsnfoiaevcle.supabase.co/rest/v1/voyages?select=id&limit=1" \
+            -H "apikey: sb_publishable_dDRrCczBXPVVCnmJtXPAfg_Sij56yJN"
