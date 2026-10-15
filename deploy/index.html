@@ -226,9 +226,6 @@
   <div class="spacer"></div>
   <button id="cloudBtn" class="cloud" type="button" style="display:none"><span class="dot"></span><span id="cloudLbl">облако</span></button>
   <button id="night" type="button">Night</button>
-  <button id="export" type="button">Экспорт</button>
-  <button id="importBtn" type="button">Импорт</button>
-  <input id="importFile" type="file" accept="application/json" style="display:none">
 </header>
 
 <section class="rem" id="remSec">
@@ -605,7 +602,7 @@
         </div>
 
         <details class="cl">
-          <summary>Восстановление</summary>
+          <summary>Восстановление из облака</summary>
           <div class="cl-block">
             <div class="hint">Если на устройствах разошлись данные. Обычно не нужно.</div>
             <div class="seg">
@@ -614,6 +611,15 @@
             </div>
           </div>
         </details>
+      </div>
+
+      <div class="cl-block" id="cloudBackup">
+        <div class="hint">Резервная копия в файл. Не зависит от облака, раз в месяц не помешает.</div>
+        <div class="seg" style="flex-direction:row">
+          <button id="export" type="button">Экспорт</button>
+          <button id="importBtn" type="button">Импорт</button>
+        </div>
+        <input id="importFile" type="file" accept="application/json" style="display:none">
       </div>
 
     </div>
@@ -630,7 +636,7 @@ const K_NIGHT   = 'noonreport.night';
    ОБЛАКО (Supabase). Пусто — работаем как раньше, только локально.
    anon-ключ публичный по замыслу: доступ к данным режет RLS на сервере.
    ============================================================ */
-const APP_V = 53;   // поднимать вместе с версией в sw.js
+const APP_V = 54;   // поднимать вместе с версией в sw.js
 const SB_URL = 'https://wgqrozeqxsnfoiaevcle.supabase.co';
 const SB_KEY = 'sb_publishable_dDRrCczBXPVVCnmJtXPAfg_Sij56yJN';
 const K_DIRTY = 'noonreport.sync.dirty';       // {entries:{id:1}, voyages:{id:1}} — ещё не отправлено
@@ -2014,8 +2020,8 @@ async function replaceFromCloud(){
 const hhmmOf = ms => { const d = new Date(ms); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); };
 function setCloud(){
   const b = $('cloudBtn');
-  if (!SB_URL){ b.style.display = 'none'; return; }
   b.style.display = '';
+  if (!SB_URL){ b.className = 'cloud'; $('cloudLbl').textContent = 'копия'; return; }
   const n = pendingCount();
   let cls = '', txt = '';
   if (!auth){ cls = 'warn'; txt = 'войти'; }
@@ -2030,9 +2036,9 @@ function setCloud(){
 }
 function renderCloud(){
   if (!$('cloudSheet').classList.contains('on')) return;
-  $('cloudLogin').style.display = auth ? 'none' : '';
-  $('cloudMain').style.display  = auth ? '' : 'none';
-  if (!auth) return;
+  $('cloudLogin').style.display = auth || !SB_URL ? 'none' : '';
+  $('cloudMain').style.display  = auth && SB_URL ? '' : 'none';
+  if (!auth || !SB_URL) return;
   const n = pendingCount();
   $('cloudWho').textContent = auth.email || '—';
   $('cloudState').textContent = sync.busy ? 'идёт обмен…' : !navigator.onLine ? 'нет сети' : sync.err ? 'ошибка' : 'в порядке';
