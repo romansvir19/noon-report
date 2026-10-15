@@ -362,8 +362,7 @@
         <div class="inp"><input id="wxMs" type="text" readonly><span class="unit">m/s</span></div></label>
       <label class="f"><span>True wind direction</span>
         <div class="inp"><input id="wxDirT" type="number" inputmode="numeric" step="1" min="0" max="360"><span class="unit">°</span></div></label>
-      <label class="f calc"><span>True wind speed</span>
-        <div class="inp"><input id="wxKn" type="number" inputmode="decimal" step="0.1"><span class="unit">kn</span></div></label>
+      <input id="wxKn" type="hidden">
       <label class="f calc"><span>Relative wind direction</span>
         <div class="inp"><input id="wxDirR" type="number" inputmode="numeric" step="1" min="0" max="360"><span class="unit">°</span></div></label>
     </div>
@@ -636,7 +635,7 @@ const K_NIGHT   = 'noonreport.night';
    ОБЛАКО (Supabase). Пусто — работаем как раньше, только локально.
    anon-ключ публичный по замыслу: доступ к данным режет RLS на сервере.
    ============================================================ */
-const APP_V = 54;   // поднимать вместе с версией в sw.js
+const APP_V = 55;   // поднимать вместе с версией в sw.js
 const SB_URL = 'https://wgqrozeqxsnfoiaevcle.supabase.co';
 const SB_KEY = 'sb_publishable_dDRrCczBXPVVCnmJtXPAfg_Sij56yJN';
 const K_DIRTY = 'noonreport.sync.dirty';       // {entries:{id:1}, voyages:{id:1}} — ещё не отправлено
@@ -807,8 +806,8 @@ function computeRec(o){
   const bft = num(o.wxBft);
   const br = (bft !== null && BFT[bft]) ? BFT[bft] : null;
   o.wxMs = br ? (bft === 12 ? '32.7+' : br[2] + '–' + br[3]) : '';
-  // истинная скорость ветра в узлах: середина шкалы Бофорта, пока не вписана вручную
-  if (pov.wxKn === undefined) o.wxKn = br ? (bft === 12 ? '64' : trim0(fmt((br[0] + br[1]) / 2, 1))) : '';
+  // истинная скорость ветра в узлах для расчёта относительного: середина шкалы Бофорта (на экран не выводится)
+  o.wxKn = br ? (bft === 12 ? '64' : trim0(fmt((br[0] + br[1]) / 2, 1))) : '';
   // кажущийся ветер: вектор истинного ветра минус вектор судна (курс + SOG).
   // Направления метеорологические — «откуда дует»; относительное — от носа по часовой
   const wt = num(o.wxDirT), wk = num(o.wxKn), sg = num(o.sog);
@@ -888,7 +887,7 @@ function deckLog(o, prev, v){
 
 let formOver = {};   // ручные правки журнала для записи, открытой в форме
 let prevOver = {};   // ручные правки автополей — цепочка и расчёт их не перезаписывают
-const CARRYT = new Set([...CARRY.map(c => c.to), 'hours', 'meRh', 'wxKn', 'wxDirR']);
+const CARRYT = new Set([...CARRY.map(c => c.to), 'hours', 'meRh', 'wxDirR']);
 
 function readForm(){
   const o = {};
@@ -928,7 +927,7 @@ function paint(o){
     el.closest('.f').classList.toggle('dlover', ov[f] !== undefined);
   });
   const pov = o.prevOver || {};
-  ['hours','meRh','wxKn','wxDirR'].forEach(f => {
+  ['hours','meRh','wxDirR'].forEach(f => {
     const el = $(f);
     if (document.activeElement !== el) el.value = o[f] ?? '';
   });
@@ -1475,7 +1474,7 @@ $('night').onclick = async () => {
 };
 
 ['gpsRdPrev','gpsRdCurr','gpsPrev','logRdPrev','logRdCurr','logPrev','hours','date','tz',
- 'meRhPrev','meRh','meRevPrev','meRev','mePwrEst','curDir','course','wxBft','wxDirT','wxKn','wxDirR',
+ 'meRhPrev','meRh','meRevPrev','meRev','mePwrEst','curDir','course','wxBft','wxDirT','wxDirR',
  'ae1Prev','ae1Rh','ae2Prev','ae2Rh','ae3Prev','ae3Rh']
   .forEach(id => {
     $(id).addEventListener('input', () => {
