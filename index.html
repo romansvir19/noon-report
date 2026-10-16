@@ -635,7 +635,7 @@ const K_NIGHT   = 'noonreport.night';
    ОБЛАКО (Supabase). Пусто — работаем как раньше, только локально.
    anon-ключ публичный по замыслу: доступ к данным режет RLS на сервере.
    ============================================================ */
-const APP_V = 55;   // поднимать вместе с версией в sw.js
+const APP_V = 56;   // поднимать вместе с версией в sw.js
 const SB_URL = 'https://wgqrozeqxsnfoiaevcle.supabase.co';
 const SB_KEY = 'sb_publishable_dDRrCczBXPVVCnmJtXPAfg_Sij56yJN';
 const K_DIRTY = 'noonreport.sync.dirty';       // {entries:{id:1}, voyages:{id:1}} — ещё не отправлено
@@ -1029,7 +1029,10 @@ function recalc(){
   deckLog(o, pv, voyById(o.voyageId));
   paint(o);
   renderRem();
-  if (viewing === null){ draft = o; saveDraft(); }
+  if (viewing === null){
+    if (draft){ o.updatedAt = draft.updatedAt; o.after = draft.after; o.createdAt = draft.createdAt; }   // служебное — не терять
+    draft = o; saveDraft();
+  }
 }
 
 let dt;
@@ -1043,6 +1046,8 @@ const isoLocal = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,
 function blankFrom(last){
   const o = {};
   FIELDS.forEach(f => o[f] = '');
+  o.after = last ? last.id : '';        // поколение: после какого репорта этот бланк
+  o.createdAt = Date.now();
   if (last){
     [...CARRY, ...SEED].forEach(c => { if (last[c.from]) o[c.to] = last[c.from]; });
     // после EOSP / Arrival / Anchor следующий репорт обычно в те же сутки (например NOON),
@@ -1653,6 +1658,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
 
   // миграция: постоянные id и время правки — нужны облаку
   if (ensureIds()){ await persist(); await saveVoy(); await saveRem(); }
+  if (draft && draft.after === undefined) draft.after = newestId();
   await loadSyncState();
   await cleanRems();
 
@@ -1680,6 +1686,26 @@ const LIST = { entries: () => entries, voyages: () => voyages, reminders: () => 
 const TABLES = ['voyages', 'entries', 'reminders'];
 const OPTIONAL = { reminders:1, drafts:1 };   // таблицы второй очереди: их отсутствие не останавливает обмен репортами
 const draftId = () => auth && auth.uid ? 'draft_' + auth.uid : null;
+/* самый свежий закрытый репорт — от него должен идти текущий черновик */
+const newestId = () => {
+  if (!entries.length) return '';
+  const top = [...entries].sort((a,b) => (b.date||'').localeCompare(a.date||'') || (b.seq||0) - (a.seq||0))[0];
+  return top.id || '';
+};
+/* черновик устарел, если после него уже закрыт репорт (например, на другом устройстве).
+   Если репорт-основа удалён — просто перепривязываем, содержимое не трогаем.
+   Возвращает true, если черновик был заменён чистым бланком. */
+function checkDraftGen(){
+  if (!draft) return false;
+  const nid = newestId();
+  if (draft.after === undefined || draft.after === nid) { if (draft.after === undefined) draft.after = nid; return false; }
+  if (!entries.some(e => e.id === draft.after)){ draft.after = nid; return false; }
+  const top = entries.find(e => e.id === nid);
+  const keepVoy = draft.voyageId;
+  draft = blankFrom(top); draft.voyageId = voyById(keepVoy) ? keepVoy : activeVoy;
+  draft.updatedAt = Date.now(); dirty.draft = 1; draftJson = draftSnap(draft);
+  return true;
+}
 /* id пользователя из самого токена входа (поле sub) — не ждать обновления токена */
 const uidOf = tok => { try { return JSON.parse(atob(String(tok).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || ''; } catch { return ''; } };
 let auth  = null;                 // {access_token, refresh_token, exp, email}
@@ -1865,6 +1891,7 @@ async function pushAll(){
     await saveDirty();
   }
   // черновик — один документ на пользователя
+  checkDraftGen();
   if (dirty.draft && draft && draftId()){
     const at = draft.updatedAt || 0;
     try {
@@ -1923,10 +1950,12 @@ async function pullAll(){
 /* черновик с другого устройства: берём, если он новее моего и мой не ждёт отправки */
 function mergeDraft(r){
   if (r.id !== draftId() || r.deleted) return false;
+  const d = r.data || {};
+  if (d.after !== newestId()) return false;              // чужой черновик старее последнего закрытого репорта
   const ru = r.updated_at || 0, mine = (draft && draft.updatedAt) || 0;
-  if (mine >= ru) return false;
-  if (dirty.draft && mine >= ru) return false;
-  draft = r.data || {}; draft.updatedAt = ru;
+  const mineStale = draft && draft.after !== undefined && draft.after !== newestId() && entries.some(e => e.id === draft.after);
+  if (!mineStale && mine >= ru) return false;
+  draft = d; draft.updatedAt = ru;
   dirty.draft = 0; draftJson = draftSnap(draft);
   return true;
 }
@@ -1953,6 +1982,10 @@ async function applyPulled(changed, hadNone){
   recalcChain();
   if (hadNone && entries.length && !changed.has('draft')){   // новое устройство: бланк — от последнего репорта, как после закрытия
     draft = blankFrom(entries[0]); draft.voyageId = activeVoy; recalcChain();
+  } else if (checkDraftGen()){                                // где-то закрыли репорт — мой черновик того дня устарел
+    recalcChain(); changed.add('draft');
+    toast('Репорт закрыт на другом устройстве — открыт новый бланк');
+    scheduleSync(2000);
   }
   await saveRem(); renderRem();
   await persist(); await saveVoy(); await saveDirty(); await store.set(K_DRAFT, JSON.stringify(draft));
@@ -1982,6 +2015,7 @@ async function runSync(){
     sync.warn = '';
     await pushAll();
     await pullAll();
+    if (pendingCount() || dirty.draft) await pushAll();   // приём мог породить своё (заменённый черновик) — дослать сразу
     sync.lastOk = Date.now(); sync.err = '';
     await saveSyncState();
   } catch (e){
