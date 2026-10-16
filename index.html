@@ -358,13 +358,13 @@
     <div class="grid">
       <label class="f"><span>Wind force (Beaufort)</span>
         <div class="inp"><input id="wxBft" type="number" inputmode="numeric" step="1" min="0" max="12"><span class="unit">Bft</span></div></label>
-      <label class="f calc"><span>Wind speed</span>
-        <div class="inp"><input id="wxMs" type="text" readonly><span class="unit">m/s</span></div></label>
       <label class="f"><span>True wind direction</span>
         <div class="inp"><input id="wxDirT" type="number" inputmode="numeric" step="1" min="0" max="360"><span class="unit">°</span></div></label>
-      <input id="wxKn" type="hidden">
       <label class="f calc"><span>Relative wind direction</span>
         <div class="inp"><input id="wxDirR" type="number" inputmode="numeric" step="1" min="0" max="360"><span class="unit">°</span></div></label>
+      <label class="f calc"><span>True wind speed</span>
+        <div class="inp"><input id="wxMs" type="text" readonly><span class="unit">m/s</span></div></label>
+      <input id="wxKn" type="hidden">
     </div>
   </div>
 </section>
@@ -635,7 +635,7 @@ const K_NIGHT   = 'noonreport.night';
    ОБЛАКО (Supabase). Пусто — работаем как раньше, только локально.
    anon-ключ публичный по замыслу: доступ к данным режет RLS на сервере.
    ============================================================ */
-const APP_V = 56;   // поднимать вместе с версией в sw.js
+const APP_V = 57;   // поднимать вместе с версией в sw.js
 const SB_URL = 'https://wgqrozeqxsnfoiaevcle.supabase.co';
 const SB_KEY = 'sb_publishable_dDRrCczBXPVVCnmJtXPAfg_Sij56yJN';
 const K_DIRTY = 'noonreport.sync.dirty';       // {entries:{id:1}, voyages:{id:1}} — ещё не отправлено
